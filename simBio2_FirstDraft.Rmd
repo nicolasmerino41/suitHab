@@ -1,0 +1,442 @@
+---
+title: "simBio2"
+author: "Nico & Núria"
+date: "2025-08-21"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Biotically Safe Climate Habitat and Extinction Debt under Rule-Based Metaweb Assembly
+
+## Concept
+
+We use a minimal, rule-based assembly: climate filter first, then a prey-feasibility check (consumers need at least one prey). No dispersal, no carrying capacity. The regional metaweb is fixed (constructed allometrically, but not analyzed). We quantify (i) how much climatically suitable habitat is actually usable once prey are considered, (ii) how habitat-loss geometry changes that gap, and (iii) how much of today's observed biodiversity is 'living on borrowed time' through an interaction-driven extinction-debt delay.
+
+## Entities and Notation
+
+- Grid cells \( c \in C \) with climate vector \( x_c \).
+- Species \( s \in S \) with climatic niche center \( \mu_s \) and breadth \( b_s \).
+- Fixed regional metaweb \( E \subset S\times S \) (directed predator \(\to\) prey).
+- Climate suitability (example Gaussian kernel):
+$$ \text{Suit}_{s,c} = \exp\!\left(-\dfrac{\lVert x_c - \mu_s \rVert^2}{2 b_s^2}\right) $$
+- Binary climate pass:
+$$ Z_{s,c} = \mathbf{1}\{\text{Suit}_{s,c} \ge \tau\} $$
+- Basal set \( B \subset S \). Presence \( P_{s,c}(t) \in \{0,1\} \).
+
+## Assembly (t = 0)
+
+1) **Climate filter:** set \( P_{s,c}(0) = Z_{s,c} \).
+2) **Trophic feasibility:** for non-basal species \( s \notin B \), in each cell \( c \), if no prey are present \( \sum_{q:(s,q)\in E} P_{q,c}(0)=0 \), the species **does not disappear instantly**; instead it enters the extinction-debt timer (below).
+
+### Extinction-Debt Mechanic (interaction-driven)
+
+Let integer \( \delta \ge 0 \) be the **debt window** (time steps). For each \( s,c \), track a counter \( D_{s,c}(t) \) (time without **support**).
+
+- **Support** at time \( t \):
+  - If \( s \in B \): support = climate pass (\( Z_{s,c}=1 \)).
+  - If \( s \notin B \): support = presence of at least one prey (\( \sum_{q:(s,q)\in E} P_{q,c}(t) \ge 1 \)).
+
+**Update rule** (for each step \( t \to t{+}1 \)):
+
+\[
+\begin{aligned}
+&\text{If supported: } D_{s,c}(t{+}1)=0,\; P_{s,c}(t{+}1)=1.\\
+&\text{If unsupported: } D_{s,c}(t{+}1)=D_{s,c}(t)+1,\; P_{s,c}(t{+}1)=
+\begin{cases}
+1, & D_{s,c}(t{+}1) \le \delta,\\
+0, & D_{s,c}(t{+}1) = \delta{+}1~.
+\end{cases}
+\end{aligned}
+\]
+
+> By default, debt applies to consumers losing prey. You may optionally allow basal species to accrue debt when climate fails; we keep basal tied strictly to climate (no debt) unless stated otherwise.
+
+## Core Metrics
+
+### Species-level
+
+1) **Biotically Safe Climate Habitat** (BSH; 'usable' climate):
+$$
+\text{BSH}_s(r) = \frac{1}{|C|}\sum_{c\in C} \mathbf{1}\Big\{ Z_{s,c}=1 \wedge \big(\sum_{q:(s,q)\in E} P_{q,c}(t) \ge r\big) \Big\},\quad r\in\{1,2\}
+$$
+
+2) **Interaction-Limited Range Fraction** (ILRF):
+$$
+\text{ILRF}_s = 1 - \frac{\sum_{c} \mathbf{1}\{ Z_{s,c}=1 \wedge \sum_{q} P_{q,c}(t) \ge 1 \}}{\sum_{c} \mathbf{1}\{ Z_{s,c}=1 \}}
+$$
+
+3) **Species Extinction Debt** (share of currently occupied cells in debt):
+$$
+\text{Debt}_s(\delta) = \frac{\sum_{c} \mathbf{1}\{ P_{s,c}(t)=1 \wedge \text{unsupported at } t \wedge D_{s,c}(t)\in[1,\delta] \}}{\sum_{c} \mathbf{1}\{ P_{s,c}(t)=1 \}}
+$$
+
+### Cell-level
+
+4) **Single-Prey Dependence** (pre-debt fragility):
+$$
+\text{SPD}_c = \frac{1}{N_c}\sum_{s\notin B: P_{s,c}=1} \mathbf{1}\Big\{ \sum_{q:(s,q)\in E} P_{q,c}(t) = 1 \Big\},
+$$
+where \( N_c \) is the number of consumers present in \( c \).
+
+5) **Trophic height**: longest realized chain in cell \( c \) at time \( t \).
+
+6) **Turnover**: species and interaction Jaccard between cells; compare distributions (interaction \(\beta\)-diversity vs species \(\beta\)-diversity).
+
+### Regional (realized web)
+
+7) Realized regional web = union of extant species after assembly; compute connectance, modularity, predator:prey richness ratio.
+
+## Questions & Hypotheses
+
+- **H1 (non-trivial ILRF):** After controlling for trophic level, ILRF is explained by **prey redundancy** (mean \#prey per suitable cell) and **prey-climate synchrony** (correlation of prey suitability surfaces). Many but highly synchronous prey\(\Rightarrow\) high ILRF.
+
+- **H2 (threshold):** **Trophic height vs basal richness** shows a knee near the point where mean \#prey per consumer crosses \(\approx 1\). Clustered habitat loss shifts the knee right (communities become brittle).
+
+- **H3 (debt burden):** **Debt** and **SPD** spike under clustered/edge-biased habitat loss, revealing 'borrowed time' populations invisible to richness alone.
+
+- **H4 (regional invariants):** Despite local churn, regional connectance and predator:prey ratio vary little across climate rasters/resolutions; **interaction \(\beta\)-diversity > species \(\beta\)-diversity** consistently.
+
+## Habitat-Loss Scenarios (same area removed)
+
+- Random cell removal.
+- Clustered patch removal (e.g., patch masks; Moran-like).
+- Edge-biased fragmentation (remove high-perimeter cells).
+- Climate-targeted (remove hottest/driest deciles).
+
+For each, re-assemble from scratch; compute \( \Delta \)BSH, \( \Delta \)ILRF, \( \Delta \)Debt, \( \Delta \)SPD, \( \Delta \)trophic height, and regional metrics.
+
+## Analyses
+
+- **Prey redundancy:** for each species, histogram of \#prey per suitable cell; relate ILRF\(_s\) to mean/variance.
+- **Prey-climate synchrony:** mean pairwise correlation of prey \( Z_{q,c} \) across cells (or Jaccard of suitable sets); partial dependence of ILRF\(_s\).
+- **Debt dynamics:** track \( D_{s,c}(t) \); total debt load \( \sum_{s,c} \mathbf{1}\{ D_{s,c}\in[1,\delta] \} \); predicted near-term losses by advancing \( \delta \) steps with no recovery.
+- **Knee detection:** fit piecewise linear or \( y=1-\exp(-\lambda x) \) to trophic height vs basal richness; report knee \( x^* \) and shifts across scenarios.
+- **Invariants:** variance partition of local vs regional metrics across climate/resolution replicates.
+
+## Figure Plan
+
+1) ILRF drivers (partial dependence on redundancy and synchrony, stratified by trophic level).  
+2) Threshold curves: trophic height vs basal richness (random vs clustered).  
+3) Debt maps: \( \text{SPD}_c \) and species \( \text{Debt}_s \) before/after clustered loss.  
+4) Invariants & turnover: distributions of species vs interaction \(\beta\)-diversity; ranges of regional metrics across replicates.  
+5) Scenario impact curves: \( \Delta \)BSH, \( \Delta \)ILRF, \( \Delta \)Debt vs % area lost.
+
+---
+
+## Implementation Skeleton (R)
+
+Below are scaffolding functions. Replace TODOs with your data structures. The logic matches the math above.
+
+```{r}
+# ---- Data structures (examples) ----
+# Z: matrix [S x C] of climate pass (0/1)
+# E: list of integer vectors; E[[s]] = indices of prey q for predator s
+# basal: logical length S (TRUE if s is basal)
+# delta: integer debt window
+# T_max: steps to run debt dynamics until convergence or delta
+
+assemble_with_debt <- function(Z, E, basal, delta = 2, T_max = 50) {
+  S <- nrow(Z); C <- ncol(Z)
+  P <- Z * 1L
+  D <- matrix(0L, S, C)
+
+  supported <- function(P, s, c) {
+    if (basal[s]) {
+      return(Z[s, c] == 1L)
+    } else {
+      prey <- E[[s]]
+      if (length(prey) == 0) return(FALSE)
+      return(sum(P[prey, c]) >= 1L)
+    }
+  }
+
+  for (t in seq_len(T_max)) {
+    P_next <- P
+    D_next <- D
+    for (c in seq_len(C)) {
+      for (s in seq_len(S)) {
+        sup <- supported(P, s, c)
+        if (sup) {
+          D_next[s, c] <- 0L
+          P_next[s, c] <- 1L
+        } else {
+          D_next[s, c] <- D[s, c] + 1L
+          if (D_next[s, c] <= delta) {
+            P_next[s, c] <- 1L
+          } else {
+            P_next[s, c] <- 0L
+          }
+        }
+      }
+    }
+    # early stop if nothing changes
+    if (all(P_next == P) && all(D_next == D)) break
+    P <- P_next; D <- D_next
+  }
+  list(P = P, D = D)
+}
+
+# ---- Metrics ----
+
+bsh_species <- function(P, Z, E, r = 1L, s_index = NULL) {
+  S <- nrow(P); C <- ncol(P)
+  if (is.null(s_index)) idx <- seq_len(S) else idx <- s_index
+  out <- rep(NA_real_, length(idx))
+  k <- 1L
+  for (s in idx) {
+    suitable <- which(Z[s, ] == 1L)
+    if (length(suitable) == 0) { out[k] <- NA_real_; k <- k + 1L; next }
+    prey <- E[[s]]
+    if (length(prey) == 0) {
+      # basal: BSH equals climate-suitable fraction
+      out[k] <- length(suitable) / C
+    } else {
+      prey_ok <- colSums(P[prey, , drop = FALSE]) >= r
+      out[k] <- sum(prey_ok[suitable]) / C
+    }
+    k <- k + 1L
+  }
+  out
+}
+
+ilrf_species <- function(P, Z, E, s_index = NULL) {
+  S <- nrow(P)
+  if (is.null(s_index)) idx <- seq_len(S) else idx <- s_index
+  out <- rep(NA_real_, length(idx))
+  k <- 1L
+  for (s in idx) {
+    suitable <- which(Z[s, ] == 1L)
+    denom <- length(suitable)
+    if (denom == 0) { out[k] <- NA_real_; k <- k + 1L; next }
+    prey <- E[[s]]
+    if (length(prey) == 0) {
+      # basal: ILRF = 0 within suitable climate
+      out[k] <- 0
+    } else {
+      prey_ct <- colSums(P[prey, , drop = FALSE])
+      fail <- sum(prey_ct[suitable] == 0L)
+      out[k] <- fail / denom
+    }
+    k <- k + 1L
+  }
+  out
+}
+
+debt_species <- function(P, D, Z, E, basal, delta, s_index = NULL) {
+  S <- nrow(P)
+  if (is.null(s_index)) idx <- seq_len(S) else idx <- s_index
+  out <- rep(NA_real_, length(idx))
+  k <- 1L
+  for (s in idx) {
+    occ <- which(P[s, ] == 1L)
+    denom <- length(occ)
+    if (denom == 0) { out[k] <- NA_real_; k <- k + 1L; next }
+    # unsupported now?
+    unsupported <- logical(length(occ))
+    if (basal[s]) {
+      unsupported <- Z[s, occ] == 0L
+    } else {
+      prey <- E[[s]]
+      prey_ct <- colSums(P[prey, occ, drop = FALSE])
+      unsupported <- prey_ct == 0L
+    }
+    in_debt_now <- unsupported & (D[s, occ] >= 1L) & (D[s, occ] <= delta)
+    out[k] <- sum(in_debt_now) / denom
+    k <- k + 1L
+  }
+  out
+}
+
+spd_cell <- function(P, E, basal) {
+  S <- nrow(P); C <- ncol(P)
+  out <- rep(NA_real_, C)
+  for (c in seq_len(C)) {
+    consumers <- which(!basal & P[, c] == 1L)
+    if (length(consumers) == 0) { out[c] <- NA_real_; next }
+    one_prey <- 0L
+    for (s in consumers) {
+      prey <- E[[s]]
+      if (length(prey) == 0) next
+      if (sum(P[prey, c]) == 1L) one_prey <- one_prey + 1L
+    }
+    out[c] <- one_prey / length(consumers)
+  }
+  out
+}
+
+# Trophic height per cell (longest path in realized cell-level web)
+trophic_height <- function(P, E, basal) {
+  S <- nrow(P); C <- ncol(P)
+  out <- rep(0L, C)
+  # precompute adjacency per cell
+  for (c in seq_len(C)) {
+    present <- which(P[, c] == 1L)
+    if (length(present) == 0) { out[c] <- 0L; next }
+    # Build adjacency (pred -> prey) for present species only
+    A <- vector('list', length = length(present))
+    names(A) <- as.character(present)
+    for (s in present) {
+      A[[as.character(s)]] <- intersect(E[[s]], present)
+    }
+    # Longest chain length: DP over DAG assumption (if cycles, fallback to capped BFS)
+    # Here we compute predator->prey depth; basal get height 1
+    height <- rep(NA_integer_, S); height[basal] <- 1L
+    changed <- TRUE; iter <- 0L; max_iter <- S
+    while (changed && iter < max_iter) {
+      changed <- FALSE; iter <- iter + 1L
+      for (s in present) {
+        prey <- A[[as.character(s)]]
+        if (length(prey) == 0) {
+          if (is.na(height[s]) || height[s] < 1L) { height[s] <- 1L; changed <- TRUE }
+        } else {
+          hprey <- height[prey]
+          if (all(!is.na(hprey))) {
+            newh <- max(hprey) + 1L
+            if (is.na(height[s]) || newh > height[s]) { height[s] <- newh; changed <- TRUE }
+          }
+        }
+      }
+    }
+    out[c] <- max(height[present], na.rm = TRUE)
+  }
+  out
+}
+
+# ---- Habitat-loss scenario helpers (masks) ----
+# Z is [S x C]; masks are length C logical vectors where FALSE means 'removed cell'
+
+apply_mask <- function(Z, mask_keep) {
+  Z[, mask_keep, drop = FALSE] * 1L
+}
+
+random_mask <- function(C, keep_frac, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  keep <- rep(FALSE, C)
+  keep[sample.int(C, size = round(keep_frac * C))] <- TRUE
+  keep
+}
+
+# Placeholder clustered and edge-biased masks: implement with your spatial grid
+clustered_mask <- function(C, keep_frac, coords, range_param) {
+  # TODO: create spatially clustered keep mask using e.g. Gaussian random field thresholding
+  rep(TRUE, C)  # placeholder
+}
+
+edge_biased_mask <- function(C, keep_frac, coords, neighbor_list) {
+  # TODO: compute per-cell perimeter/edge score; preferentially drop high-edge cells
+  rep(TRUE, C)  # placeholder
+}
+
+# ---- Analysis workflows (sketch) ----
+
+run_scenario <- function(Z, E, basal, delta, mask_keep = NULL) {
+  if (!is.null(mask_keep)) {
+    Z_use <- apply_mask(Z, mask_keep)
+  } else {
+    Z_use <- Z
+  }
+  sim <- assemble_with_debt(Z_use, E, basal, delta = delta)
+  P <- sim$P; D <- sim$D
+
+  # Metrics
+  BSH1 <- bsh_species(P, Z_use, E, r = 1L)
+  BSH2 <- bsh_species(P, Z_use, E, r = 2L)
+  ILRF <- ilrf_species(P, Z_use, E)
+  # species-level debt
+  Debt  <- debt_species(P, D, Z_use, E, basal, delta)
+  # cell-level
+  SPD <- spd_cell(P, E, basal)
+  TH  <- trophic_height(P, E, basal)
+
+  list(P = P, D = D, BSH1 = BSH1, BSH2 = BSH2, ILRF = ILRF, Debt = Debt, SPD = SPD, TH = TH)
+}
+
+compare_scenarios <- function(Z, E, basal, delta, masks, names_vec) {
+  base <- run_scenario(Z, E, basal, delta, mask_keep = NULL)
+  outs <- lapply(masks, function(m) run_scenario(Z, E, basal, delta, mask_keep = m))
+  names(outs) <- names_vec
+
+  # Example deltas (aggregate by mean ignoring NAs)
+  mean_na <- function(x) mean(x, na.rm = TRUE)
+  summary <- data.frame(
+    scenario = names_vec,
+    d_BSH1 = sapply(outs, function(o) mean_na(o$BSH1) - mean_na(base$BSH1)),
+    d_ILRF = sapply(outs, function(o) mean_na(o$ILRF) - mean_na(base$ILRF)),
+    d_Debt = sapply(outs, function(o) mean_na(o$Debt) - mean_na(base$Debt)),
+    d_SPD  = sapply(outs, function(o) mean_na(o$SPD) - mean_na(base$SPD)),
+    d_TH   = sapply(outs, function(o) mean_na(o$TH)  - mean_na(base$TH))
+  )
+  list(base = base, outs = outs, summary = summary)
+}
+
+# ---- Turnover (sketch) ----
+# Compute Jaccard between cells for species and interactions
+
+jaccard_between_cells <- function(P) {
+  C <- ncol(P)
+  J <- matrix(NA_real_, C, C)
+  for (i in seq_len(C)) for (j in i:C) {
+    a <- P[, i] == 1L; b <- P[, j] == 1L
+    inter <- sum(a & b); union <- sum(a | b)
+    val <- ifelse(union == 0, NA_real_, inter / union)
+    J[i, j] <- J[j, i] <- val
+  }
+  1 - J  # turn into dissimilarity
+}
+
+interaction_presence_by_cell <- function(P, E) {
+  # returns a list of logical vectors per cell for realized interactions (pred->prey)
+  C <- ncol(P); S <- nrow(P)
+  out <- vector('list', C)
+  # index each potential interaction by a hash (s,q)
+  pairs <- do.call(rbind, lapply(seq_len(S), function(s) if (length(E[[s]])>0) cbind(s, E[[s]]) else NULL))
+  if (is.null(pairs)) return(vector('list', C))
+  key <- paste(pairs[,1], pairs[,2], sep = '>')
+  for (c in seq_len(C)) {
+    present <- which(P[, c] == 1L)
+    ok <- rep(FALSE, nrow(pairs))
+    for (i in seq_len(nrow(pairs))) {
+      s <- pairs[i, 1]; q <- pairs[i, 2]
+      ok[i] <- (s %in% present) && (q %in% present)
+    }
+    names(ok) <- key
+    out[[c]] <- ok
+  }
+  out
+}
+
+jaccard_interactions_between_cells <- function(P, E) {
+  C <- ncol(P)
+  Ilist <- interaction_presence_by_cell(P, E)
+  J <- matrix(NA_real_, C, C)
+  for (i in seq_len(C)) for (j in i:C) {
+    a <- Ilist[[i]]; b <- Ilist[[j]]
+    # align by names
+    alln <- union(names(a), names(b))
+    aa <- a[alln]; bb <- b[alln]
+    aa[is.na(aa)] <- FALSE; bb[is.na(bb)] <- FALSE
+    inter <- sum(aa & bb); union <- sum(aa | bb)
+    val <- ifelse(union == 0, NA_real_, inter / union)
+    J[i, j] <- J[j, i] <- val
+  }
+  1 - J
+}
+```
+
