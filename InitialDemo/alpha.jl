@@ -3,9 +3,6 @@
 # Rule-based assembly: climate filter → ≥1 prey
 # No dispersal, no K, δ-free (structural) demo
 # =========================================
-
-using Random
-
 # ---------- Helpers: grid & indices ----------
 struct Grid
     nx::Int
@@ -57,23 +54,30 @@ struct SpeciesPool
 end
 
 # Build a simple allometric metaweb via mass ratio window (DAG by construction)
-function build_pool(S::Int=120; basal_frac=0.35, seed=1)
+function build_pool(S::Int=140; basal_frac=0.45, seed=1,
+                    Rmin=3.0, Rmax=300.0,  # wider diet window
+                    b0=0.12, bspread=0.08) # broader niches
     Random.seed!(seed)
-    # masses: log-uniform across ~5 orders
-    logm = range(log(1e-2), log(10.0); length=S) |> collect
+
+    # masses: log-spread + shuffle
+    logm = collect(range(log(1e-2), log(10.0); length=S))
     shuffle!(logm)
     masses = exp.(logm)
-    # basal flags
-    basal = falses(S)
+
+    # order by mass (increasing)
+    order = sortperm(masses)
+
+    # >>> basal are the LIGHTEST nB species <<<
     nB = round(Int, basal_frac*S)
-    basal[1:nB] .= true
-    # niches: centers uniform, breadths mixed
+    basal = falses(S)
+    basal[order[1:nB]] .= true
+
+    # climate niches
     mu = rand(S)
-    b  = 0.08 .+ 0.06*rand(S) # moderate breadths
-    # metaweb: predator eats prey if mass ratio in [Rmin,Rmax]
-    Rmin, Rmax = 5.0, 200.0
+    b  = b0 .+ bspread .* rand(S)
+
+    # metaweb via mass-ratio window; ensure each consumer has ≥1 prey
     E = [Int[] for _ in 1:S]
-    order = sortperm(masses) # increasing
     for ii in eachindex(order)
         s = order[ii]
         if basal[s]; continue; end
@@ -84,8 +88,13 @@ function build_pool(S::Int=120; basal_frac=0.35, seed=1)
                 push!(E[s], q)
             end
         end
+        # fallback: if empty, link to the immediate smaller species
+        if isempty(E[s]) && ii > 1
+            push!(E[s], order[ii-1])
+        end
     end
-    SpeciesPool(S, masses, basal, mu, b, E)
+
+    return SpeciesPool(S, masses, basal, mu, b, E)
 end
 
 # ---------- Climate pass (Z) ----------
@@ -246,6 +255,7 @@ end
 
 # ---------- Demo workflow ----------
 grid = make_grid(60, 60; seed=11)
+heatmap(grid)
 pool = build_pool(140; basal_frac=0.4, seed=2)
 
 # Baseline (no loss)
@@ -269,7 +279,6 @@ end
 
 # ---------- Plot (Makie pattern you prefer) ----------
 begin
-    using CairoMakie
     fig = Figure(; size = (800, 420))
     ax = Axis(fig[1,1], xlabel = "Area lost (fraction)", ylabel = "ΔBSH (mean over consumers)")
     lines!(ax, collect(loss_fracs), ΔBSH_random, label = "Random loss")
@@ -284,3 +293,5 @@ println("Baseline mean BSH (consumers): ", round(base.meanBSH_consumers, digits=
 println("At 40% loss, ΔBSH random vs clustered: ",
         round(ΔBSH_random[findfirst(x->x≈0.4, loss_fracs)], digits=3), " vs ",
         round(ΔBSH_clustered[findfirst(x->x≈0.4, loss_fracs)], digits=3))
+
+        
