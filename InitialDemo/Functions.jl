@@ -63,65 +63,111 @@ struct SpeciesPool
 end
 
 """
-build_pool(S; basal_frac=0.45, seed=1,
-           Rmin=3.0, Rmax=300.0,   # mass-ratio diet window
-           b0=0.12, bspread=0.08)  # niche breadths
+build_pool(S; kwargs...) -> SpeciesPool
 
-Creates S species with:
-- log-spread body masses,
-- the LIGHTEST ~basal_frac fraction set as basal,
-- random climatic niches (mu, breadth b),
-- a metaweb where a predator s eats prey q if mass ratio m_s/m_q ∈ [Rmin, Rmax].
-Guarantees every consumer has ≥1 potential prey (fallback to immediate smaller).
+Create a species pool and metaweb with **body-mass ratio** feeding rules.
+
+Key knobs you’ll likely tune later:
+
+  Redundancy (diet breadth / link density)
+    - R0_mean::Float64 = 12.0     # preferred predator:prey mass ratio (≈ log-normal mean)
+    - R0_sd::Float64   = 0.50     # SD (on log-scale) of preferred ratio among predators
+    - sigma::Float64   = 0.50     # width of the log-ratio kernel (within predator)
+    - density::Float64 = 0.30     # global thinning multiplier
+    - pmax::Float64    = 0.90     # max acceptance probability at kernel peak
+
+  Synchrony (climatic niches; affects spatial co-occurrence of basal prey)
+    - niche_mode::Symbol = :uniform    # :uniform or :bimodal (basal only)
+    - mu_basal_centers::Tuple = (0.25, 0.75)  # centers if bimodal
+    - mu_basal_sd::Float64   = 0.05           # SD around each center (bimodal)
+    - b0_basal::Float64 = 0.12    # baseline niche breadth for basal
+    - b0_cons::Float64  = 0.12    # baseline niche breadth for consumers
+    - bspread_basal::Float64 = 0.05
+    - bspread_cons::Float64  = 0.05
+
+Other:
+    - basal_frac::Float64 = 0.45  # lightest fraction of species set as basal
+    - seed::Int = 1               # RNG seed (thread-safe, local RNG)
+
+Returns: SpeciesPool(S, masses, basal, mu, b, E)
 """
-# Replace your build_pool with this variant
-function build_pool(S::Int=140; basal_frac=0.5, seed=1,
-                    R0_mean=16.0, R0_sd=0.6,   # predator-specific preferred ratio
-                    sigma=0.35,                # spread of log-ratio kernel
-                    density=0.05, pmax=0.7,    # overall thinning
-                    b0=0.12, bspread=0.08)
+function build_pool(
+    S::Int;
+    basal_frac::Float64 = 0.45,
+    seed::Int = 1,
+    # diet / redundancy
+    R0_mean::Float64 = 12.0,
+    R0_sd::Float64   = 0.50,
+    sigma::Float64   = 0.50,
+    density::Float64 = 0.30,
+    pmax::Float64    = 0.90,
+    # climate / synchrony
+    niche_mode::Symbol = :uniform,              # :uniform | :bimodal (basal only)
+    mu_basal_centers::Tuple{Float64,Float64} = (0.25, 0.75),
+    mu_basal_sd::Float64 = 0.05,
+    b0_basal::Float64 = 0.12, bspread_basal::Float64 = 0.05,
+    b0_cons::Float64  = 0.12, bspread_cons::Float64  = 0.05
+)
+    rng = MersenneTwister(seed)
 
-    Random.seed!(seed)
-
-    # masses (log-spread)
+    # body masses (log-spread)
     logm   = collect(range(log(1e-2), log(10.0); length=S))
-    shuffle!(logm)
+    shuffle!(rng, logm)
     masses = exp.(logm)
 
-    # basal = LIGHTEST species
-    order = sortperm(masses)     # increasing mass
-    nB    = round(Int, basal_frac*S)
+    # basal = LIGHTEST fraction
+    order = sortperm(masses)               # increasing mass
+    nB    = round(Int, basal_frac * S)
     basal = falses(S); basal[order[1:nB]] .= true
 
-    # climate niches
-    mu = rand(S)
-    b  = b0 .+ bspread .* rand(S)
+    # climatic niches
+    mu = similar(masses)
+    b  = similar(masses)
 
-    # predator-specific preferred ratio
-    R0 = exp.(log(R0_mean) .+ R0_sd .* randn(S))
+    # consumers first (uniform)
+    cons_ids = findall(!, basal)
+    mu[cons_ids] .= rand(rng, length(cons_ids))
+    b[cons_ids]  .= b0_cons .+ bspread_cons .* rand(rng, length(cons_ids))
 
-    # build metaweb with probabilistic kernel on log ratio
+    # basal (uniform or bimodal)
+    bas_ids = findall(basal)
+    if niche_mode === :bimodal
+        nb  = length(bas_ids)
+        nb1 = nb ÷ 2; nb2 = nb - nb1
+        c1, c2 = mu_basal_centers
+        mu[bas_ids[1:nb1]]     .= clamp.(c1 .+ mu_basal_sd .* randn(rng, nb1), 0, 1)
+        mu[bas_ids[nb1+1:end]] .= clamp.(c2 .+ mu_basal_sd .* randn(rng, nb2), 0, 1)
+    else
+        mu[bas_ids] .= rand(rng, length(bas_ids))
+    end
+    b[bas_ids] .= b0_basal .+ bspread_basal .* rand(rng, length(bas_ids))
+
+    # predator-specific preferred ratio (log-normal)
+    R0 = exp.(log(R0_mean) .+ R0_sd .* randn(rng, S))
+
+    # metaweb: probabilistic acceptance on log mass ratio
     E = [Int[] for _ in 1:S]
     for (ii, s) in pairs(order)
         basal[s] && continue
         for jj in 1:ii-1
             q = order[jj]
-            r = masses[s] / masses[q]              # ratio > 1
+            r = masses[s] / masses[q]                    # ratio > 1
             z = (log(r) - log(R0[s])) / sigma
-            p = pmax * exp(-0.5*z^2) * density     # acceptance prob
-            if rand() < p
+            p = pmax * exp(-0.5 * z^2) * density        # acceptance prob
+            if rand(rng) < p
                 push!(E[s], q)
             end
         end
-        # guarantee ≥1 potential prey (pick nearest in log-ratio)
+        # ensure every consumer has ≥1 potential prey (fallback = nearest ratio)
         if isempty(E[s]) && ii > 1
-            cand = order[1:ii-1]
+            cand   = order[1:ii-1]
             target = log(masses[s]) - log(R0[s])
-            qstar = cand[argmin(abs.(log.(masses[cand]) .- target))]
+            qstar  = cand[argmin(abs.(log.(masses[cand]) .- target))]
             push!(E[s], qstar)
         end
     end
-    return SpeciesPool(S, masses, basal, mu, b, E)
+
+    SpeciesPool(S, masses, basal, mu, b, E)
 end
 
 # ---------- Climate pass (Z) ----------
@@ -328,7 +374,7 @@ end
 # B = A * p  (A = climate area; p = conditional BSH)
 # ΔB = p̄ * ΔA + Ā * Δp + ΔA * Δp, where bars are midpoints
 struct Decomp{T}
-    dB::T; dA_part::T; dp_part::T; synergy::T
+    dB::T; dA_only::T; dInt_only::T; synergy::T
 end
 
 function decompose_delta(B0, A0, p0, B1, A1, p1)
@@ -337,10 +383,10 @@ function decompose_delta(B0, A0, p0, B1, A1, p1)
     dp = p1 - p0
     Abar = 0.5*(A0 + A1)
     pbar = 0.5*(p0 + p1)
-    dA_part = pbar * dA
-    dp_part = Abar * dp
-    synergy = dB - dA_part - dp_part
-    Decomp(dB, dA_part, dp_part, synergy)
+    dA_only = pbar * dA
+    dInt_only = Abar * dp
+    synergy = dB - dA_only - dInt_only
+    Decomp(dB, dA_only, dInt_only, synergy)
 end
 
 struct Summary
@@ -350,6 +396,25 @@ struct Summary
     ΔBSH_hi::Vector{Float64}
 end
 
+"""
+sweep_ensemble(pool_seed_list, mask_seeds_list; kwargs...) -> Summary
+
+Run a loss sweep and return ΔBSH envelopes (mean, 10%, 90%) across pool × mask
+replicates. This function is *agnostic* to redundancy/synchrony; pass those via
+`build_pool`’s keyword arguments.
+
+Arguments (most important):
+  - kind::Symbol = :random        # :random | :clustered
+  - grid::Grid                    # your grid
+  - τ::Float64 = 0.5              # climate threshold
+  - loss_fracs = 0.0:0.05:0.9     # fraction of area removed
+  - S::Int, basal_frac::Float64   # pool size and basal share
+  - nseeds_cluster::Int = 6       # number of clusters for :clustered
+  - metric::Symbol = :fraction    # :fraction (on kept cells) or :area (vs original area)
+  - pool_kwargs...                # **forwarded to build_pool** (e.g., sigma, density, niche_mode,…)
+
+Returns: Summary(loss, ΔBSH_mean, ΔBSH_lo, ΔBSH_hi)
+"""
 function sweep_ensemble(pool_seed_list, mask_seeds_list;
         kind::Symbol = :random,
         grid,
@@ -358,10 +423,13 @@ function sweep_ensemble(pool_seed_list, mask_seeds_list;
         S::Int,
         basal_frac::Float64,
         nseeds_cluster::Int = 6,
-        metric::Symbol = :area)   # :area or :fraction
-
-    n = length(loss_fracs)
-    μ  = fill(NaN, n); lo = fill(NaN, n); hi = fill(NaN, n)
+        metric::Symbol = :fraction,
+        pool_kwargs...
+)
+    n    = length(loss_fracs)
+    μ    = fill(NaN, n)
+    lo   = fill(NaN, n)
+    hi   = fill(NaN, n)
     Cfull = grid.C
 
     Threads.@threads for k in 1:n
@@ -370,56 +438,30 @@ function sweep_ensemble(pool_seed_list, mask_seeds_list;
         vals = Float64[]
 
         for ps in pool_seed_list, ms in mask_seeds_list
-            pool = build_pool(
-                200;
-                basal_frac = 0.35,        # not too low (need prey biomass), not too high (consumers still picky)
-                # diet kernel: narrow + focused → few prey per consumer
-                R0_mean = 10.0,
-                R0_sd   = 0.25,           # predators prefer similar ratios → less flexibility
-                sigma   = 0.22,           # narrow diet window → low redundancy
-                density = 0.12,           # thin metaweb
-                pmax    = 0.70,
-                # climate niches: basal narrower & clustered → prey synchrony
-                b0      = 0.10,           # this is the *consumer* base; we’ll override basal below
-                bspread = 0.04
-            )
-            # prey synchrony: split basal into two tight climate guilds
-            basal_ids = findall(pool.basal)
-            nb = length(basal_ids)
-            nb1 = nb ÷ 2
-            nb2 = nb - nb1
-
-            pool.mu[basal_ids[1:nb1]] .= clamp.(0.25 .+ 0.03 .* randn(nb1), 0, 1)
-            pool.mu[basal_ids[nb1+1:end]] .= clamp.(0.75 .+ 0.03 .* randn(nb2), 0, 1)
-            pool.b[basal_ids] .= 0.06 .+ 0.01 .* rand(nb)    # basal narrower
-            # consumers a bit broader (leave pool.b for non-basal as created)
-                        Zfull = climate_pass(pool, grid; τ=τ)
+            # Build pool with whatever parametrisation you pass via pool_kwargs
+            pool  = build_pool(S; basal_frac=basal_frac, seed=ps, pool_kwargs...)
+            Zfull = climate_pass(pool, grid; τ=τ)
             baseP = assemble(Zfull, pool)
 
-            base = if metric === :area
-                mean(bsh1_area_fraction(baseP, Zfull, pool, Cfull)[.!pool.basal])
-            else
-                mean(bsh1_per_species(baseP, Zfull, pool)[.!pool.basal])  # fraction on current cells
-            end
+            base = metric === :area ?
+                mean(bsh1_area_fraction(baseP, Zfull, pool, Cfull)[.!pool.basal]) :
+                mean(bsh1_per_species(baseP, Zfull, pool)[.!pool.basal])
 
             keepmask = kind === :random ?
                 random_mask(Cfull, keep; seed=ms) :
                 clustered_mask(grid, keep; nseeds=nseeds_cluster, seed=ms)
 
             Z = apply_mask(Zfull, keepmask)
+            if size(Z, 2) == 0
+                push!(vals, 0.0); continue
+            end
             P = assemble(Z, pool)
 
-            b = if metric === :area
-                mean(bsh1_area_fraction(P, Z, pool, Cfull)[.!pool.basal])
-            else
+            b = metric === :area ?
+                mean(bsh1_area_fraction(P, Z, pool, Cfull)[.!pool.basal]) :
                 mean(bsh1_per_species(P, Z, pool)[.!pool.basal])
-            end
 
             push!(vals, b - base)
-            Z = climate_pass(pool, grid; τ=0.5)
-
-            th = trophic_height_per_cell(P, pool)
-            @show maximum(th), count(>(1), th)/length(th)   # want max ≥ 3 and many cells >1
         end
 
         μ[k]  = mean(vals)
@@ -427,6 +469,47 @@ function sweep_ensemble(pool_seed_list, mask_seeds_list;
         hi[k] = quantile(vals, 0.90)
     end
 
-    return Summary(collect(loss_fracs), μ, lo, hi)
+    Summary(collect(loss_fracs), μ, lo, hi)
 end
 
+# Redundancy: mean #prey present per suitable cell (baseline)
+function redundancy_per_consumer(P, Z, pool)
+    S, C = size(P)
+    out = fill(NaN, S)
+    for s in 1:S
+        pool.basal[s] && continue
+        idx = findall(@view Z[s, :])
+        if !isempty(idx)
+            cnt = 0; denom = 0
+            for c in idx
+                denom += 1
+                for q in pool.E[s]
+                    if P[q,c]; cnt += 1; end
+                end
+            end
+            out[s] = cnt/denom
+        end
+    end
+    out
+end
+
+# Synchrony: average pairwise correlation of prey presences across cells
+function prey_synchrony_per_consumer(P, pool)
+    S, C = size(P)
+    out = fill(NaN, S)
+    for s in 1:S
+        pool.basal[s] && continue
+        prey = pool.E[s]
+        np = length(prey)
+        if np ≥ 2
+            M = BitMatrix(P[prey, :])
+            v = Vector{Float64}()
+            for i in 1:np-1, j in i+1:np
+                c = cor(Float64.(M[i, :]), Float64.(M[j, :]))
+                if isfinite(c); push!(v, c); end
+            end
+            if !isempty(v); out[s] = mean(v); end
+        end
+    end
+    out
+end
