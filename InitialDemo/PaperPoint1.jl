@@ -213,7 +213,7 @@ function plot_decomp_three(series; title_str="ΔBSH decomposition vs loss (area 
             lines!(ax, X, Y.dInt, label="Interaction-only")
             lines!(ax, X, Y.dSyn, label="Synergy")
             hlines!(ax, [0.0], color=(:gray,0.5), linestyle=:dash)
-            if j==3; axislegend(ax, position=:lb); end
+            if j==1; axislegend(ax, position=:lb); end
         end
         display(fig)
     end
