@@ -126,8 +126,8 @@ function knee_plot(; grid::Grid, pool::SpeciesPool, τ::Float64=0.5, keep_frac::
 end
 
 # # assuming you already created `grid` and `pool` as before
-# knees = knee_plot(; grid=grid, pool=pool, τ=0.5, keep_frac=0.6, nbins=15)
-# println("Estimated knee (random vs clustered): ", knees)
+knees = knee_plot(; grid=grid, pool=pool, τ=0.5, keep_frac=0.6, nbins=15)
+println("Estimated knee (random vs clustered): ", knees)
 
 # Probability-of-persistence knee (TH ≥ T)
 function knee_prob_for_mask(grid::Grid, pool::SpeciesPool; τ=0.5, keepmask, T::Int=3, nbins::Int=15, min_bin::Int=20)
