@@ -162,7 +162,7 @@ end
 # (F) Minimal demo / plotting
 # ---------------------------------------------------
 # Example params (you can swap in your RS regimes). Choose a setup that
-# creates low redBndancy + high synchrony so that hotspot targeting bites.
+# creates low redundancy + high synchrony so that hotspot targeting bites.
 
 grid = make_grid(60, 60; seed=11)
 
@@ -234,6 +234,6 @@ begin
     lines!(ax, losses, ExC, label="Clustered - Random")
     lines!(ax, losses, ExH, label="Hotspot - Random")
     hlines!(ax, [0.0], color=(:gray,0.5), linestyle=:dash)
-    axislegend(ax, position=:lb)
+    axislegend(ax, position=:lt)
     display(fig)
 end
