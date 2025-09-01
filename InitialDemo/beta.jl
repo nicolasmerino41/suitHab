@@ -5,7 +5,7 @@ grid = make_grid(100, 100; seed=11)
 
 pool_seeds = 1:5
 mask_seeds = 1:30
-metric = :fraction
+metric = :area
 sum_rand = sweep_ensemble(
     pool_seeds, mask_seeds; 
     kind=:random, grid=grid, 
@@ -46,5 +46,3 @@ begin
     # axislegend(ax, position=:lb)
     display(fig)
 end
-
-
