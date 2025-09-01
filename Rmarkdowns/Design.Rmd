@@ -46,21 +46,28 @@ Let \(Z_s(c)=1\) if climate is suitable to species \(s\) in cell \(c\), and 0 ot
 For a species \(s\), define:
 
 - **Climate area fraction**
-\[
+$$
 A_s \,=\, \frac{1}{C}\sum_{c=1}^{C} \mathbf{1}\{Z_s(c)=1\}
-\]
+$$
 
 - **Prey support *within* climate**
-\[
+
+$$
 p_s \,=\, \frac{\sum_c \mathbf{1}\{Z_s(c)=1 \wedge \text{(at least one prey of $s$ present in $c$)}\}}
 {\sum_c \mathbf{1}\{Z_s(c)=1\}}\,,
-\]
+$$
+
+$$
+p_s \,=\, \frac{\sum_c \mathbf{1}\{Z_s(c)=1 \wedge \text{(at least one prey of $s$ present in $c$)}\}}
+{\sum_c \mathbf{1}\{Z_s(c)=1\}}\,,
+$$
+
 with the convention \(p_s=1\) for basal species and \(p_s=0\) if the denominator is 0.
 
 - **BSH** (Biotically Safe Habitat) is the fraction of grid cells that are **both** climatically suitable and biotically supported:
-\[
-\boxed{\text{BSH}_s = A_s\,p_s.}
-\]
+$$
+\text{BSH}_s = A_s\,p_s
+$$
 
 BSH is a *fraction* (0–1) measured against the whole grid.
 
@@ -77,29 +84,29 @@ Habitat loss removes a fraction \(f\) of cells by a spatial rule:
 All quantities above are recomputed on the **kept** cells.
 
 Let \((A_0, p_0)\) be the species values before loss and \((A_1, p_1)\) after loss; then
-\[
-\Delta B_s = A_1 p_1 - A_0 p_0
-\]
+$$
+\Delta BSH_s = A_1 p_1 - A_0 p_0
+$$
 is the change in BSH for species \(s\).
 
 ## Linear decomposition (why synergy was \(\approx 0\))
 
 Define midpoints \(\bar A = (A_0{+}A_1)/2\) and \(\bar p = (p_0{+}p_1)/2\). The symmetric (Shapley-like) decomposition for the *linear* outcome \(B=Ap\) is
-\[
-\boxed{\Delta B_s
+$$
+\Delta BSH_s
 = \underbrace{\bar p\,\Delta A}_{\text{climate-only}}
 + \underbrace{\bar A\,\Delta p}_{\text{interaction-only}}
-+ \underbrace{\text{synergy}}_{0\ \text{for }B=Ap}}.
-\]
++ \underbrace{\text{synergy}}_{0\ \text{for }B=Ap}.
+$$
 
 Because \(B=Ap\) is bilinear, the midpoint residual (synergy) is exactly 0 (up to numerical noise). In random loss, \(\Delta p\approx 0\) and almost all change is climate-only. When loss targets prey-rich suitable cells (hotspot), \(\Delta p<0\) and the interaction-only term becomes negative.
 
 ## Nonlinear viability (making synergy real)
 
 Many management questions care about *viability* rather than raw area. We therefore define a **nonlinear outcome**
-\[
-\boxed{U(A,p) \;=\; A\,\phi(p)}
-\]
+$$
+V(A,p) \;=\; A\,\phi(p)
+$$
 with two options for \(\phi\):
 
 - **Saturating:** \(\phi(p) = \frac{p}{p+h}\) with \(h>0\) (half-saturation).
@@ -107,14 +114,14 @@ with two options for \(\phi\):
 - **Threshold:** \(\phi(p) = \mathbf{1}\{p\geq \rho\}\).
 
 The same midpoint logic yields a symmetric attribution for any \(U\):
-\[
+$$
 \begin{aligned}
-\Delta U_s &= U(A_1,p_1) - U(A_0,p_0),\\\\
-\text{climate-only} &= U(A_1,\bar p) - U(A_0,\bar p),\\\\
-\text{interaction-only} &= U(\bar A,p_1) - U(\bar A,p_0),\\\\
-\text{synergy} &= \Delta U_s - (\text{climate-only}) - (\text{interaction-only}).
+\Delta V_s &= V(A_1,p_1) - V(A_0,p_0),\\\\
+\text{climate-only} &= V(A_1,\bar p) - V(A_0,\bar p),\\\\
+\text{interaction-only} &= V(\bar A,p_1) - V(\bar A,p_0),\\\\
+\text{synergy} &= \Delta V_s - (\text{climate-only}) - (\text{interaction-only}).
 \end{aligned}
-\]
+$$
 
 When \(\phi\) is nonlinear, the residual is generally **non-zero**. Intuitively, synergy captures the compounding effect of losing prey support *exactly where* viable climate remains (curvature + covariance).
 
@@ -130,5 +137,36 @@ When \(\phi\) is nonlinear, the residual is generally **non-zero**. Intuitively,
 - With a **viability** outcome \(U(A,p)\), synergy becomes a genuine, interpretable quantity.
 - Comparing **random / clustered / hotspot** loss trajectories for \((\text{climate}, \text{interaction}, \text{synergy})\) reveals when and how trophic structure amplifies the damage beyond climate loss alone.
 
+
+For each species \(s\) with niche center \(\mu_s\) and breadth \(b_s\), the climatic suitability in cell \(c\) with climate value \(clim(c)\) is
+
+\[
+su_{s}(c) \;=\; \exp\!\left(-\,\frac{(clim(c)-\mu_s)^2}{2\,b_s^2}\right).
+\]
+
+Species \(s\) is considered climate-suitable in cell \(c\) if
+
+\[
+Z_{s,c} \;=\;
+\begin{cases}
+1, & su_{s}(c) \;\geq\; \tau, \\
+0, & \text{otherwise}.
+\end{cases}
+\]
+
+Define the mean BSH change under scenario \(X\) as \(\Delta B^{(X)}\),  
+with \(X \in \{\text{random}, \text{clustered}, \text{hotspot}\}\).
+
+- **Excess damage of clustered over random:**
+\[
+\Delta BSH_{\text{clust-rand}}
+= \Delta BSH_{\text{clustered}} - \Delta BSH_{\text{random}}.
+\]
+
+- **Excess damage of hotspot over random:**
+\[
+\Delta BSH_{\text{hotspot-rand}}
+= \Delta BSH_{\text{hotspot}} - \Delta BSH_{\text{random}}.
+\]
 
 
