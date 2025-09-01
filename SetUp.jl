@@ -1,5 +1,5 @@
 @time begin
-    PC = "nicol"
+    PC = ENV["USERNAME"]
     using Random, CairoMakie, StatsBase, Statistics
     using Pkg
     Pkg.activate(joinpath("C:\\Users", PC, "OneDrive\\PhD\\GitHub\\simBio2"))
