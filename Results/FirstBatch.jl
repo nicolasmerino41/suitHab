@@ -40,7 +40,7 @@ curH = decomp_curve(:hotspot; hotspot_power=2.5)    # stronger targeting, bigger
 
 # Plot three panels (Random / Clustered / Hotspot)
 begin
-    fig = Figure(resolution=(1180,380))
+    fig = Figure(; size=(1180,380))
     curves = [curR, curC, curH]; titles = ["Random", "Clustered", "Hotspot"]
     for j in 1:3
         ax = Axis(fig[1,j], title=titles[j], xlabel="Area lost (fraction)",
@@ -78,7 +78,7 @@ end
 
 # Quick scatter (hotspot)
 begin
-    fig = Figure(resolution=(560,380))
+    fig = Figure(; size=(560,380))
     ax = Axis(fig[1,1], xlabel="ΔA", ylabel="Δp", title="Hotspot, loss=0.5")
     scatter!(ax, ΔH.ΔA, ΔH.Δp, markersize=5)
     hlines!(ax, [0.0], color=(:gray,0.5), linestyle=:dash)
@@ -110,7 +110,7 @@ for f in losses
 end
 
 begin
-    fig = Figure(resolution=(700,360))
+    fig = Figure(; size=(700,360))
     ax  = Axis(fig[1,1], xlabel="Area lost (fraction)", ylabel="Excess ΔB vs random")
     lines!(ax, xs, excessC, label="Clustered − Random")
     lines!(ax, xs, excessH, label="Hotspot − Random")

@@ -123,7 +123,6 @@ sum_hot   = sweep_ensemble(pool_seeds, mask_seeds; kind=:hotspot,  grid=grid, τ
 
 # quick plot
 begin
-    using CairoMakie
     fig = Figure(resolution=(900,320))
     ax  = Axis(fig[1,1], xlabel="Area lost (fraction)", ylabel="ΔBSH (mean over consumers)",
                title = "ΔBSH vs loss — $(uppercase(string(metric))) basis")

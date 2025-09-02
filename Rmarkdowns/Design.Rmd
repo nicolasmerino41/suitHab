@@ -1,5 +1,5 @@
 ---
-title: "simBio2 Design"
+title: "suitHab Design"
 author: "Nico & Núria"
 date: "2025-08-28"
 output:
@@ -23,25 +23,25 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Conceptual scaffold
+# Framework
 
 ## Grid, climate, species, and metaweb
 
 We consider a spatial grid of \(C\) cells, each with a scalar climate value in \([0,1]\). A regional pool of \(S\) species is endowed with:
 
-- a climatic niche center and breadth, yielding a **climate suitability** indicator \(Z_s(c)\in\{0,1\}\),
+- a climatic niche center and breadth, yielding a climate suitability indicator \(Z_s(c)\in\{0,1\}\),
 
-- a **metaweb** of trophic links (directed pred\(\to\)prey), built from an allometric niche model,
+- a metaweb of trophic links (directed pred\(\to\)prey), built from an allometric niche model,
 
-- a **basal** flag (no prey required) vs **consumer** (at least one prey required).
+- a basal flag (no prey required) vs consumer (at least one prey required).
 
-A community in a cell assembles by the rule: a consumer persists only if at least **one** of its prey is present in that cell. There is no abundance; a species is either **present** or **absent** in a cell.
+A community in a cell assembles by the rule: a consumer persists only if at least one of its prey is present in that cell. There is no abundance; a species is either present or absent in a cell.
 
 ## From suitability to presence
 
 Let \(Z_s(c)=1\) if climate is suitable to species \(s\) in cell \(c\), and 0 otherwise. After applying the trophic rule, presence is \(P_s(c)\in\{0,1\}\).
 
-## Biotically Safe Habitat (BSH)
+## Biotically Suitable Habitat (BSH)
 
 For a species \(s\), define:
 
@@ -57,14 +57,9 @@ p_s \,=\, \frac{\sum_c \mathbf{1}\{Z_s(c)=1 \wedge \text{(at least one prey of $
 {\sum_c \mathbf{1}\{Z_s(c)=1\}}\,,
 $$
 
-$$
-p_s \,=\, \frac{\sum_c \mathbf{1}\{Z_s(c)=1 \wedge \text{(at least one prey of $s$ present in $c$)}\}}
-{\sum_c \mathbf{1}\{Z_s(c)=1\}}\,,
-$$
-
 with the convention \(p_s=1\) for basal species and \(p_s=0\) if the denominator is 0.
 
-- **BSH** (Biotically Safe Habitat) is the fraction of grid cells that are **both** climatically suitable and biotically supported:
+- **BSH** (Biotically Suitable Habitat) is the fraction of grid cells that are both climatically suitable and biotically viable:
 $$
 \text{BSH}_s = A_s\,p_s
 $$
@@ -81,7 +76,7 @@ Habitat loss removes a fraction \(f\) of cells by a spatial rule:
 
 - **Hotspot:** rank cells by a prey-aware score (e.g. number of consumers with at least one climatically suitable prey) and remove the highest-scoring first.
 
-All quantities above are recomputed on the **kept** cells.
+**All quantities above are recomputed on the kept cells!!!!!!**
 
 Let \((A_0, p_0)\) be the species values before loss and \((A_1, p_1)\) after loss; then
 $$
@@ -89,9 +84,11 @@ $$
 $$
 is the change in BSH for species \(s\).
 
-## Linear decomposition (why synergy was \(\approx 0\))
+## Linear decomposition
 
-Define midpoints \(\bar A = (A_0{+}A_1)/2\) and \(\bar p = (p_0{+}p_1)/2\). The symmetric (Shapley-like) decomposition for the *linear* outcome \(B=Ap\) is
+Let's define midpoints \(\bar A = (A_0{+}A_1)/2\) and \(\bar p = (p_0{+}p_1)/2\). 
+
+The symmetric (Shapley-like) decomposition for the linear outcome \(B=Ap\) is
 $$
 \Delta BSH_s
 = \underbrace{\bar p\,\Delta A}_{\text{climate-only}}
@@ -99,11 +96,11 @@ $$
 + \underbrace{\text{synergy}}_{0\ \text{for }B=Ap}.
 $$
 
-Because \(B=Ap\) is bilinear, the midpoint residual (synergy) is exactly 0 (up to numerical noise). In random loss, \(\Delta p\approx 0\) and almost all change is climate-only. When loss targets prey-rich suitable cells (hotspot), \(\Delta p<0\) and the interaction-only term becomes negative.
+Because \(B=Ap\) is bilinear, the residual (synergy) is exactly 0. In random loss, \(\Delta p\approx 0\) and almost all change is climate-only. When loss targets prey-rich suitable cells (hotspot), \(\Delta p<0\) and the interaction-only term becomes negative.
 
 ## Nonlinear viability (making synergy real)
 
-Many management questions care about *viability* rather than raw area. We therefore define a **nonlinear outcome**
+Given management questions care about viability instead of area, we therefore define a nonlinear outcome
 $$
 V(A,p) \;=\; A\,\phi(p)
 $$
@@ -123,20 +120,13 @@ $$
 \end{aligned}
 $$
 
-When \(\phi\) is nonlinear, the residual is generally **non-zero**. Intuitively, synergy captures the compounding effect of losing prey support *exactly where* viable climate remains (curvature + covariance).
+When \(\phi\) is nonlinear, the residual is generally non-zero. Intuitively, synergy captures the compounding effect of losing prey support exactly where viable climate remains **(curvature + covariance)?**.
 
-## What the signs mean
+## What do the signs mean?
 
 - **Climate-only** (<0): we removed climatically suitable cells for \(s\).
 - **Interaction-only** (<0): in the suitable cells we kept, the *share* that are prey-supported decreased (e.g. hotspot removal of prey-rich suitable cells).
 - **Synergy** \(\neq\) 0: because viability is nonlinear, coincident changes in \(A\) and \(p\) interact (they are not additive). Large negative synergy implies losses concentrate where \(\phi(p)\) is most sensitive.
-
-## Take-home
-
-- With \(B=Ap\), synergy vanishes by construction; interactions still matter via \(\Delta p\).
-- With a **viability** outcome \(U(A,p)\), synergy becomes a genuine, interpretable quantity.
-- Comparing **random / clustered / hotspot** loss trajectories for \((\text{climate}, \text{interaction}, \text{synergy})\) reveals when and how trophic structure amplifies the damage beyond climate loss alone.
-
 
 For each species \(s\) with niche center \(\mu_s\) and breadth \(b_s\), the climatic suitability in cell \(c\) with climate value \(clim(c)\) is
 

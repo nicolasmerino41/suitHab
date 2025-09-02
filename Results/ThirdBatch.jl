@@ -236,7 +236,6 @@ begin
 end
 
 begin
-    using CairoMakie
 
     # expect these to be in scope already:
     # curR, curC, curH :: Dict(:TL2,:TL3,:TL4p => (loss, climate, interaction, synergy))
