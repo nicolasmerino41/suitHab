@@ -148,12 +148,11 @@ curH = decomp_TL_curves(:hotspot;  grid=grid, pool=pool, τ=τ, losses=losses,
 
 # --- plot grid: rows = components, cols = scenarios; lines = TL groups ---
 begin
-    using CairoMakie
     comps  = (:climate, :interaction, :synergy)
     titles = Dict(:random=>"Random", :clustered=>"Clustered", :hotspot=>"Hotspot")
     colors = Dict(:TL2=>:dodgerblue, :TL3=>:orange, :TL4p=>:forestgreen)
 
-    fig = Figure(resolution=(1180, 900))
+    fig = Figure(; size=(1180, 900))
     sets = [curR, curC, curH]
 
     for (j, curves) in enumerate(sets)             # columns (scenarios)
@@ -187,7 +186,7 @@ begin
     tl_names  = Dict(:TL2=>"TL2", :TL3=>"TL3", :TL4p=>"TL4+")
     tl_cols   = Dict(:TL2=>:dodgerblue, :TL3=>:orange, :TL4p=>:forestgreen)
 
-    fig = Figure(resolution=(1180, 900))
+    fig = Figure(; size=(1180, 900))
 
     # a small legend at the top
     legend_elems = [PolyElement(color=tl_cols[g]) for g in tl_order]
@@ -249,7 +248,7 @@ begin
 
     loss_target = 0.50
 
-    fig = Figure(resolution=(1000, 360))
+    fig = Figure(; size=(1000, 360))
 
     for (j, (curves, ttl)) in enumerate(scenarios)
         ax = Axis(fig[1, j],
