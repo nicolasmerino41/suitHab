@@ -48,7 +48,7 @@ function plot_RS_bars(results::Dict{Symbol,Any})
     )
 
     begin
-        fig = Figure(resolution=(980,620))
+        fig = Figure(; size=(980,620))
         i = 1
         for key in order
             r = results[key]
