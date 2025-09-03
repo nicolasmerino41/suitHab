@@ -447,9 +447,25 @@ function sweep_ensemble(pool_seed_list, mask_seeds_list;
                 mean(bsh1_area_fraction(baseP, Zfull, pool, Cfull)[.!pool.basal]) :
                 mean(bsh1_per_species(baseP, Zfull, pool)[.!pool.basal])
 
-            keepmask = kind === :random ?
-                random_mask(Cfull, keep; seed=ms) :
-                clustered_mask(grid, keep; nseeds=nseeds_cluster, seed=ms)
+            # keepmask = kind === :random ?
+            #     random_mask(Cfull, keep; seed=ms) :
+            #     clustered_mask(grid, keep; nseeds=nseeds_cluster, seed=ms)
+            # # inside your sweep_ensemble inner loop, where you choose a keepmask:
+
+            keepmask = begin
+                if kind === :random
+                    random_mask(grid.C, keep; seed=ms)
+                elseif kind === :clustered
+                    clustered_mask(grid, keep; nseeds=nseeds_cluster, seed=ms)
+                elseif kind === :hotspot_cons
+                    # NOTE: depends on the pool, so build pool first in the loop
+                    consumer_hotspot_mask(grid, pool; τ=τ, keep_frac=keep, power=hotspot_power, seed=ms)
+                elseif kind === :hotspot_prey
+                    prey_hotspot_mask(grid, pool; τ=τ, keep_frac=keep, power=hotspot_power, seed=ms)
+                else
+                    error("Unknown kind = $kind")
+                end
+            end
 
             Z = apply_mask(Zfull, keepmask)
             if size(Z, 2) == 0
