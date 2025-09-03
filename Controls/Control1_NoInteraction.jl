@@ -119,5 +119,3 @@ begin
 
     display(fig)
 end
-
-
