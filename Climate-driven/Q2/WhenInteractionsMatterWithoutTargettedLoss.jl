@@ -131,17 +131,23 @@ function excess_by(df, regime::String, loss::Float64, scenario::String)
 end
 
 begin
-    scen = "hotspot_" # Choose between "clustered", "hotspot_cons", "hotspot_prey"
+    scen = "clustered" # Choose between "clustered", "hotspot_cons", "hotspot_prey"
     fig = Figure(; size=(980, 620))
+    Label(
+        fig[0, 1:2], "Excess ΔU across regimes — Scenario: $(scen)",
+        fontsize = 22, tellwidth = false
+    )
     regnames = collect(keys(VI_regimes()))
     losses = unique(sort!(map(r->r.loss, rows)))
 
     col = (clim=:dodgerblue, inter=:orange, syn=:seagreen)
 
     for (k, rname) in enumerate(regnames)
-        ax = Axis(fig[div(k-1,2)+1, mod(k-1,2)+1],
-                  title=String(rname), xlabel=(k>=3 ? "Area lost (fraction)" : ""),
-                  ylabel=(mod(k-1,2)==0 ? "Excess ΔU (clustered − random)" : ""))
+        ax = Axis(
+            fig[div(k-1,2)+1, mod(k-1,2)+1],
+            title=String(rname), xlabel=(k>=3 ? "Area lost (fraction)" : ""),
+            ylabel=(mod(k-1,2)==0 ? "Excess ΔU (clustered − random)" : "")
+        )
         dC = [excess_by(rows, String(rname), ℓ, scen) for ℓ in losses]
         lines!(ax, losses, [d.dclim for d in dC], color=col.clim, label="Climate")
         lines!(ax, losses, [d.dinter for d in dC], color=col.inter, label="Interaction")

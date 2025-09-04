@@ -51,11 +51,6 @@ function climate_matched_clustered_mask(grid::Grid, pool::SpeciesPool; τ, keep_
     return keep
 end
 
-function climate_matched_hotspot_mask()
-
-    
-end
-
 # >>> RUN: compare to your earlier masks
 Z0 = climate_pass(pool, grid; τ=τ)
 kmR = climate_matched_random_mask(grid, pool; τ=τ, keep_frac=keep)
@@ -157,7 +152,7 @@ begin
     τ = 0.55
     ccH = control2_hotspot_curves(pool, grid; τ=τ, losses=0.05:0.05:0.8, nbins=20, power=2.5)
 
-    fig = Figure(resolution=(640,330))
+    fig = Figure(; size=(640,330))
     ax = Axis(fig[1,1], title="Climate-matched Hotspot − Random",
               xlabel="Area lost (fraction)", ylabel="Excess component")
     lines!(ax, ccH.losses, ccH.ex_clim,  label="Climate")
