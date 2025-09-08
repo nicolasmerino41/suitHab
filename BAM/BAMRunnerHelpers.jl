@@ -336,23 +336,38 @@ end
 # ╭─────────────────────────────
 # │ 5) Axes → pool & BAM settings
 # ╰─────────────────────────────
+# Trim diets to reduce redundancy (used for B=:soft and B=:strong)
+function _trim_diets!(rng::AbstractRNG, pool::SpeciesPool, max_prey::Int)
+    for s in 1:pool.S
+        pool.basal[s] && continue
+        L = length(pool.E[s])
+        if L > max_prey
+            shuffle!(rng, pool.E[s])
+            pool.E[s] = pool.E[s][1:max_prey]
+        end
+    end
+    return pool
+end
+
 """
 Construct a pool consistent with abiotic level (A_level) and biotic level (B_level).
 
 A_level ∈ {:neutral,:intermediate,:divergent}
 B_level ∈ {:none,:soft,:strong}
 """
-function build_pool_from_axes(rng::AbstractRNG; S::Int, basal_frac::Float64,
-                              A_level::Symbol, B_level::Symbol)
-    # Abiotic knobs
+function build_pool_from_axes(
+    rng::AbstractRNG; S::Int, basal_frac::Float64,
+    A_level::Symbol, B_level::Symbol
+)
+    # ── Abiotic (niche) setup ──────────────────────────────────────────────
     niche_mode = :uniform
     mu_centers = (0.25, 0.75)
     mu_sd      = 0.05
     b0_basal, bspread_basal, b0_cons, bspread_cons = (0.12, 0.05, 0.12, 0.05)
     if A_level === :neutral
         niche_mode = :uniform
-        b0_basal, bspread_basal = 0.18, 0.04
-        b0_cons,  bspread_cons  = 0.18, 0.04
+        b0_basal, bspread_basal = 0.22, 0.05
+        b0_cons,  bspread_cons  = 0.22, 0.05
     elseif A_level === :intermediate
         niche_mode = :uniform
         b0_basal, bspread_basal = 0.12, 0.05
@@ -366,50 +381,54 @@ function build_pool_from_axes(rng::AbstractRNG; S::Int, basal_frac::Float64,
         error("Unknown A_level $A_level")
     end
 
-    # Biotic knobs (metaweb density/connectance)
-    density, pmax = 0.30, 0.90
+    # ── Biotic (metaweb) setup ─────────────────────────────────────────────
+    # density ↓ ⇒ fewer links; pmax slight ↓ for strong
+    density, pmax, diet_cap = 0.30, 0.90, typemax(Int)
     if B_level === :none
-        density, pmax = 0.35, 0.90   # high redundancy (though ignored later)
+        density, pmax, diet_cap = 0.35, 0.90, typemax(Int)
     elseif B_level === :soft
-        density, pmax = 0.30, 0.90   # baseline redundancy
+        density, pmax, diet_cap = 0.24, 0.90, 6     # fewer links + cap 6
     elseif B_level === :strong
-        density, pmax = 0.15, 0.85   # fewer prey → stronger biotic limitation
+        density, pmax, diet_cap = 0.08, 0.85, 2     # much fewer + cap 3
     else
         error("Unknown B_level $B_level")
     end
 
-    build_pool(; S, rng, basal_frac,
-               niche_mode, mu_basal_centers=mu_centers, mu_basal_sd=mu_sd,
-               b0_basal, bspread_basal, b0_cons, bspread_cons,
-               density=density, pmax=pmax)
+    pool = build_pool(; S, rng, basal_frac,
+                      niche_mode, mu_basal_centers=mu_centers, mu_basal_sd=mu_sd,
+                      b0_basal, bspread_basal, b0_cons, bspread_cons,
+                      density=density, pmax=pmax)
+
+    # Cap diets (reduces redundancy where it matters)
+    if isfinite(diet_cap)
+        _trim_diets!(rng, pool, diet_cap)
+    end
+    return pool
 end
 
 "Translate B_level and M_level into BAM & movement parameters."
 function bam_from_axes(; B_level::Symbol, M_level::Symbol,
-                       α::Float64=1.0, τA::Float64=0.5, τocc::Float64=0.35)
-    # Biotic weights
-    β, γ = 0.0, 2.0    # default "none"
+                       α::Float64=1.0, τA::Float64=0.35, τocc::Float64=0.42)
+    β, γ = 0.0, 2.0
     if B_level === :none
-        β, γ = 0.0, 2.0       # ignore B (consumers can persist on A only)
+        β, γ = 0.0, 2.0                  # ignore B
     elseif B_level === :soft
-        β, γ = 1.0, 2.5
+        β, γ = 1.2, 3.0                  # matters modestly
     elseif B_level === :strong
-        β, γ = 2.0, 4.0
+        β, γ = 3.0, 7.0                  # sharp/strong dependence
     else
         error("Unknown B_level $B_level")
     end
-
-    # Movement (component requirement on/off)
     μ, mode = 0.0, :none
     if M_level === :off
         μ, mode = 0.0, :none
     elseif M_level === :on
-        μ, mode = 0.8, :component
+        μ, mode = 0.8, :component        # movement contributes strongly
     else
         error("Unknown M_level $M_level")
     end
     (bam=BAMParams(; α=α, β=β, μ=μ, γ=γ, τA=τA, τocc=τocc),
-     mp=MovementParams(; mode=mode, T=8))  # T can be overridden at call
+     mp=MovementParams(; mode=mode, T=8))   # T overwritten later by scaling
 end
 
 # ╭─────────────────────────────
@@ -440,6 +459,7 @@ function run_sweep_threaded_axes(; grid::Grid, S::Int=120, basal_frac::Float64=0
             rng_mask = thread_rng(sim_seed, :mask, ms, k, hl_kind)
 
             pool = build_pool_from_axes(rng_pool; S, basal_frac, A_level, B_level)
+            println("pool ", prey_stats(pool))
             A = abiotic_matrix(pool, grid)
 
             keep = hl_kind === :random    ? random_mask(rng_mask, grid.C, keepfrac) :
@@ -461,6 +481,15 @@ function run_sweep_threaded_axes(; grid::Grid, S::Int=120, basal_frac::Float64=0
 
     return (x=xs, dF=yΔ, dA=yA, dB=yB, dM=yM, dSyn=ySyn,
             meta=Dict(:hl=>hl_kind, :A=>A_level, :B=>B_level, :M=>M_level, :T=>T))
+end
+
+# Shapley on F with A held at baseline (isolates B and M contributions)
+function shapley_BM_condA(A0,B0,M0, A1,B1,M1; β, μ)
+    f(A,B,M) = A0 * (B^β) * (M^μ)
+    ΔB = (1/2)*(f(A0,B1,M0) - f(A0,B0,M0)) + (1/2)*(f(A0,B1,M1) - f(A0,B0,M1))
+    ΔM = (1/2)*(f(A0,B0,M1) - f(A0,B0,M0)) + (1/2)*(f(A0,B1,M1) - f(A0,B1,M0))
+    dF = (A0*(B1^β)*(M1^μ)) - (A0*(B0^β)*(M0^μ))
+    (; dF, ΔB, ΔM, synergy=dF-(ΔB+ΔM))
 end
 
 # alignment for one HL (single pool+mask for clarity)
@@ -519,7 +548,7 @@ function run_combo_with_alignment(; grid::Grid, S::Int=120, basal_frac::Float64=
     # Figure
     fig = Figure(; size=(1260, 760))
     labels = Dict(:random=>"Random", :clustered=>"Clustered", :front=>"Front-like")
-
+    Label(fig[0,1:3], "A_$(A_level), B_$(B_level), M_$(M_level)", fontsize=20)
     # top row
     for (col, hk) in enumerate((:random,:clustered,:front))
         r = results[hk]
