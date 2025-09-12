@@ -129,5 +129,3 @@ res = run_dashboard_analysis(
     T_frac_on=0.03
 )
 plot_dashboard(res)
-
-# I have no idea what 
