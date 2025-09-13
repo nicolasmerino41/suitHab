@@ -1,0 +1,88 @@
+---
+title: "BAM"
+author: "Nico & Núria"
+date: "2025-09-13"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Objective.**  
+We quantify how habitat‐loss (HL) geometry alters realized habitat for consumers, measured as Biotically–Accessible Suitable Habitat (BSH). We explain geometry effects mechanistically with a BAM factorization: abiotic suitability \(A\), biotic support from prey \(B\), and movement/accessibility \(M\).
+
+**Model.**  
+We simulate a regular grid with a smooth climate gradient. A species pool is generated with body masses, basal/consumer status, climatic niche centers/breadths, and a metaweb linking consumers to prey based on body‐mass ratios. For a given landscape we compute:  
+(1) climate pass \(Z\) (\(A\)-suitable cells for each species; threshold \(\tau_A\)),  
+(2) biotic support \(B_{s,i}\) from the presence of at least one prey in cell \(i\) (saturating with exponent \(\gamma\)),  
+(3) movement mask \(M_{s,i}\) by a component rule: within suitable kept cells, a cell counts only if it belongs to a connected component of size \(\geq T\) (4-neighbourhood). BSH for species \(s\) is the fraction of cells where \(Z \cdot B \cdot M\) allows occupancy above \(\tau_{occ}\) after assembly.
+
+**Outcome & attribution.**  
+We summarize per species the proxy  
+\(F_s = A_s \cdot B_s^{\beta} \cdot M_s^{\mu}\)  
+and show that \(\Delta F\) aligns with \(\Delta BSH\) across geometries (direction and rank). We decompose \(\Delta F\) into contributions of \(A,B,M\) using a midpoint (Shapley-like) split and, to remove unit-scale effects, compute **elasticities**  
+
+\[
+E_A = \frac{|\Delta A|}{\bar{A}}, \quad
+E_B = \beta \cdot \frac{|\Delta B|}{\bar{B}}, \quad
+E_M = \mu \cdot \frac{|\Delta M|}{\bar{M}} .
+\]
+
+Elasticity shares \((E_A,E_B,E_M\) normalized to sum 1) reveal which mechanism has leverage independent of raw scale.
+
+**HL geometries.**  
+We evaluate random loss (diffuse removals), clustered loss (seeded clumps), and front-like loss (a moving climate-like boundary) over loss fractions 0.2–0.8. For each of 18 scenario combinations (\(A \in \{neutral, intermediate, divergent\}\), \(B \in \{none, soft, strong\}\), \(M \in \{off, on\}\)) we average over pool and mask seeds.
+
+**Key results.**  
+(1) Clustered HL is primarily abiotic: it removes area but preserves connectivity; elasticity shares remain A-dominated.  
+(2) Random HL becomes movement-driven beyond ~50–60% loss: the share of suitable cells meeting the component rule collapses and elasticity shifts toward M.  
+(3) Front-like HL interacts with climate and diets: when climatic niches are divergent and diets narrow, biotic leverage rises (last-prey limitation along the climatic tail), even if raw \(\Delta F\) still looks A-dominated.
+
+**Baseline indicators and phase rule.**  
+From the baseline (no HL) we compute:  
+\(D\) — climate divergence (tail contrast along the fitted climate axis);  
+\(R\) — diet redundancy (mean prey per consumer);  
+\(\Theta\) — movement stiffness = \(T / \text{mean number of climatically suitable cells per consumer}\);  
+\(LPRI\) — tail-specific prey support (mean/min prey per consumer in the threatened tail).  
+
+These indicators predict which geometry is risky. We then make the rule **loss-aware** using  
+
+\[
+CRI_{\ell}(f) = \text{mean}_s \, 1\big[ (1-f) p_{0,s} < p_c \big],
+\]
+
+with \(p_c \approx 0.593\) for 4-neighbour site percolation,  
+and a basal-tail divergence \(D_{tail}\).  
+Loss-aware predictions correctly flag Random as worst exactly when fragmentation thresholds are crossed.
+
+**Management lens.**  
+Elasticity shares provide a bang-for-buck compass:  
+– high M-share \(\Rightarrow\) prioritize connectivity (component size, stepping stones);  
+– high B-share \(\Rightarrow\) prioritize prey redundancy in the climate-threatened tail;  
+– high A-share \(\Rightarrow\) prioritize area retention (compact reserves).  
+
+The dashboard combines \(\Delta BSH\) curves (impact), fragmentation diagnostics (mechanism onset), and baseline indices with predicted ranking (anticipation).
+
+**Robustness.**  
+Signals persist under seed replication, front rotation (front effects weaken when misaligned with the climate axis), and metaweb rewiring placebo (biotic signals vanish as expected). \(\Delta F\)–\(\Delta BSH\) alignment is reported per geometry; where alignment weakens we report \(\Delta BSH\) without decomposition.
+
+**Takeaway.**  
+HL geometry matters mechanistically: diffuse loss triggers connectivity thresholds; climate-aligned fronts expose last-prey risks; clustered loss is mostly area. Our loss-aware indicators (\(CRI_{\ell}, D_{tail}, LPRI\)) allow managers to diagnose the dominant failure mode before loss occurs and to target interventions accordingly.
+
+
+
