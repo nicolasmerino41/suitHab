@@ -84,5 +84,60 @@ Signals persist under seed replication, front rotation (front effects weaken whe
 **Takeaway.**  
 HL geometry matters mechanistically: diffuse loss triggers connectivity thresholds; climate-aligned fronts expose last-prey risks; clustered loss is mostly area. Our loss-aware indicators (\(CRI_{\ell}, D_{tail}, LPRI\)) allow managers to diagnose the dominant failure mode before loss occurs and to target interventions accordingly.
 
+# Second Part
+**Question.**  
+How does the geometry of habitat loss (HL) change realized habitat for consumers, and which BAM mechanism—Abiotic (\(A\)), Biotic (\(B\)), or Movement (\(M\))—explains those differences in a way managers can act on?
+
+**Realized habitat (BSH).**  
+For each species we compute Biotically–Accessible Suitable Habitat (BSH): the fraction of cells that pass three filters.  
+(A) Climate suitability: a Gaussian niche with center \(\mu\) and breadth \(b\), thresholded at \(\tau_A\).  
+(B) Biotic support: at least one prey present in the cell, based on a metaweb built from body–mass ratios; support saturates with exponent \(\gamma\) so prey redundancy matters.  
+(C) Movement/access: the cell belongs to a connected component (4-neighbors) of suitable, kept cells of size \(\geq T\) (the component rule). Assembly removes unsupported consumers iteratively; BSH is computed after assembly.
+
+**Geometries.**  
+We compare random (diffuse removals), clustered (clumps), and front-like (a boundary moves along the climate axis) loss over 20–80% loss, averaging across pool and mask seeds.
+
+**Attribution.**  
+We factor a smooth proxy  
+\(F = A \cdot B^{\beta} \cdot M^{\mu}\)  
+and show \(\Delta F\) aligns with \(\Delta BSH\). We then split \(\Delta F\) into \(A/B/M\) contributions and compute elasticities  
+
+\[
+E_A = \frac{|\Delta A|}{\bar{A}}, \quad
+E_B = \beta \cdot \frac{|\Delta B|}{\bar{B}}, \quad
+E_M = \mu \cdot \frac{|\Delta M|}{\bar{M}} .
+\]
+
+These identify the mechanism with leverage independent of raw units.
+
+**Baseline predictors (insufficient).**  
+A static movement stiffness  
+\(\Theta = T / \text{mean suitable area}\)  
+and a climate divergence index \(D\) from the baseline map did not predict which geometry is worst at moderate–high loss: they ignore the post-loss connectivity threshold and whether a climatic tail is actually removed.
+
+**Loss-aware indicators (diagnostic before impact).**  
+We introduce simple, map-based predictors evaluated at a target loss fraction \(f\):  
+1. \(CRI_{\ell}(f) = P\big[(1-f) p_{0} < p_c\big]\), the share of consumers whose expected suitable fraction falls below the percolation threshold \(p_c \approx 0.593\) for a 4-neighbor lattice. High \(CRI_{\ell}\) flags fragmentation risk \(\Rightarrow\) random loss becomes worst.  
+2. \(FTR(f)\), the fraction of a climatic tail removed by a front at loss \(f\) (using the fitted climate axis). High \(FTR\) means the front eats the tail.  
+3. \(P_{\text{fail},90\%}\), the 90th percentile across consumers of the probability that no prey are present in the threatened tail at baseline (a last-prey risk). High \(P_{\text{fail},90\%}\) means the tail is biotically fragile.
+
+**Phase rule (loss-aware).**  
+If \(M\) is on and \(CRI_{\ell}(f)\) is high \(\Rightarrow\) random is worst (connectivity failure).  
+Else if \(FTR(f)\) is high and \(P_{\text{fail},90\%}\) is high \(\Rightarrow\) front-like is worst (last-prey failure).  
+Otherwise \(\Rightarrow\) clustered is worst (area-dominated).
+
+**Results.**  
+\(\Delta BSH\) curves show: clustered \(\approx\) abiotic (area), random becomes movement-driven beyond \(\sim 50{-}60\%\) loss (connectivity collapses), and front-like expresses biotic leverage when climatic niches are divergent and prey redundancy is low in the tail. The loss-aware audit correctly identifies random-worst regimes (\(CRI_{\ell}\)), and—when \(FTR \times P_{\text{fail},90\%}\) is high—flags front-worst regimes. Elasticity shares match these mechanisms: M-share rises under random at high loss; B-share rises under fronts with tail exposure; A-share dominates for clustered.
+
+**Why this is not an artifact.**  
+The fragmentation signal appears exactly when \(CRI_{\ell}\) crosses the percolation bound; the front signal requires both tail removal (\(FTR\)) and tail prey failure (\(P_{\text{fail},90\%}\)), and vanishes when the front is rotated off the climate axis or when the metaweb is rewired (placebo). \(\Delta F{-}\Delta BSH\) alignment is reported; where it weakens we rely on \(\Delta BSH\) only.
+
+**Management lens.**  
+Use the indicators before impact to pick the lever:  
+– High \(CRI_{\ell}\) \(\Rightarrow\) invest in connectivity (component size/stepping stones).  
+– High \(FTR \times P_{\text{fail},90\%}\) \(\Rightarrow\) buffer prey redundancy in the threatened climatic tail (tail-aligned corridors, basal protection).  
+– Otherwise \(\Rightarrow\) maximize area retention in compact blocks.  
+
+This turns HL geometry into a practical triage: diffuse loss triggers connectivity thresholds; climate-aligned fronts expose last-prey risks; clustered loss is mostly area.
 
 
