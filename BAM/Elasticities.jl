@@ -215,7 +215,7 @@ function compare_raw_vs_elasticity(sum_raw; sum_elast=sum_raw, title="Raw ΔF vs
     maxΔF  = max_scale_row_raw(Rraw)
     maxE   = max_scale_row_elast(Relast)
 
-    fig = Figure(; size=(1320, 800))
+    fig = Figure(; size=(1320, 650))
     Label(fig[0, :], title * @sprintf(" — loss=%.2f", get(sum_elast, :loss, NaN)); fontsize=16, padding=(0,0,10,0))
 
     # Draw a small ternary frame
