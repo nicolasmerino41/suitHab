@@ -284,5 +284,5 @@ function plot_audit_phase_rule_lossaware_ext(audit;
     return fig
 end
 
-A = audit_phase_rule_lossaware_ext(; loss_pick=0.6)
-plot_audit_phase_rule_lossaware_ext(A; loss_pick=0.6)
+A = audit_phase_rule_lossaware_ext(; loss_pick=0.4)
+plot_audit_phase_rule_lossaware_ext(A; loss_pick=0.4)
