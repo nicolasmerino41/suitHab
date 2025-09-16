@@ -54,15 +54,14 @@ struct SpeciesPool
 end
 
 function build_pool(; S::Int, rng::AbstractRNG, basal_frac::Float64,
-                     # metaweb knobs
                      R0_mean::Float64=12.0, R0_sd::Float64=0.5, sigma::Float64=0.5,
-                     density::Float64=0.30, pmax::Float64=0.90,
-                     # niche knobs
+                     density::Float64=0.1, pmax::Float64=0.90,
                      niche_mode::Symbol=:uniform,
                      mu_basal_centers::Tuple{Float64,Float64}=(0.25,0.75),
                      mu_basal_sd::Float64=0.05,
                      b0_basal::Float64=0.12, bspread_basal::Float64=0.05,
-                     b0_cons::Float64=0.12,  bspread_cons::Float64=0.05)
+                     b0_cons::Float64=0.12,  bspread_cons::Float64=0.05,
+                     λ_align::Float64=0.6, ξ_align::Float64=0.06)
 
     logm   = collect(range(log(1e-2), log(10.0); length=S))
     shuffle!(rng, logm)
@@ -97,6 +96,7 @@ function build_pool(; S::Int, rng::AbstractRNG, basal_frac::Float64,
             r = masses[s]/masses[q]
             z = (log(r) - log(R0[s])) / sigma
             p = pmax * exp(-0.5*z^2) * density
+            p *= (1 - λ_align) + λ_align * exp(-((mu[s] - mu[q])^2 / (2*ξ_align^2)))
             if rand(rng) < p; push!(E[s], q); end
         end
         if isempty(E[s]) && ii>1
@@ -387,9 +387,9 @@ function build_pool_from_axes(
     if B_level === :none
         density, pmax, diet_cap = 0.35, 0.90, typemax(Int)
     elseif B_level === :soft
-        density, pmax, diet_cap = 0.24, 0.90, 6     # fewer links + cap 6
+        density, pmax, diet_cap = 0.18, 0.90, 3     # fewer links + cap 6
     elseif B_level === :strong
-        density, pmax, diet_cap = 0.08, 0.85, 2     # much fewer + cap 3
+        density, pmax, diet_cap = 0.10, 0.85, 2     # much fewer + cap 3
     else
         error("Unknown B_level $B_level")
     end
@@ -413,9 +413,9 @@ function bam_from_axes(; B_level::Symbol, M_level::Symbol,
     if B_level === :none
         β, γ = 0.0, 2.0                  # ignore B
     elseif B_level === :soft
-        β, γ = 1.2, 3.0                  # matters modestly
+        β, γ = 1.6, 3.0                  # matters modestly
     elseif B_level === :strong
-        β, γ = 3.0, 7.0                  # sharp/strong dependence
+            β, γ = 4.0, 7.0              # sharp/strong dependence
     else
         error("Unknown B_level $B_level")
     end
@@ -428,7 +428,7 @@ function bam_from_axes(; B_level::Symbol, M_level::Symbol,
         error("Unknown M_level $M_level")
     end
     (bam=BAMParams(; α=α, β=β, μ=μ, γ=γ, τA=τA, τocc=τocc),
-     mp=MovementParams(; mode=mode, T=8))   # T overwritten later by scaling
+     mp=MovementParams(; mode=mode, T=6))   # T overwritten later by scaling
 end
 
 # ╭─────────────────────────────
