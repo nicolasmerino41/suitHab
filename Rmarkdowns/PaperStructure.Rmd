@@ -1,0 +1,95 @@
+---
+title: "Paper Structure"
+author: "Nico & Núria"
+date: "2025-09-16"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Conceptual framework (BAM under habitat loss)
+
+We represent habitat suitability for species \( s \) at cell \( c \) as a multiplicative BAM score
+
+$$
+F_{s,c} \,=\, A_{s,c}^{\alpha}\, B_{s,c}^{\beta}\, M_{s,c}^{\mu},
+$$
+where \( A_{s,c} \) encodes abiotic climate suitability (Gaussian niche around a species-specific optimum), \( B_{s,c} \) encodes biotic support (availability of at least one prey for consumers, derived from a regional metaweb), and \( M_{s,c} \) encodes movement/connectivity (component-based access to climate-suitable, kept cells). A cell counts toward a species’ realized distribution if \( F_{s,c} \ge \tau_{\mathrm{occ}} \).
+
+We summarize each species by **Biotically Safe Habitat (BSH)**:
+
+$$
+\mathrm{BSH}_s(f) \,=\, \frac{1}{C_0}\sum_{c\in \text{kept}(f)} \mathbf{1}\{F_{s,c}\ge \tau_{\mathrm{occ}}\},
+$$
+i.e. the fraction of the original grid \( C_0 \) that remains suitable after removing an area fraction \( f \) under a habitat-loss geometry (random, clustered, or front-like). We analyze changes relative to the shared baseline at \( f=0 \):
+
+$$
+\Delta\mathrm{BSH}_s(f)=\mathrm{BSH}_s(f)-\mathrm{BSH}_s(0),
+\qquad
+\overline{\Delta\mathrm{BSH}}(f)=\text{mean over consumers } s.
+$$
+
+### Two lenses: climate-only (AM) vs full interactions (ABM)
+To isolate the role of biotic interactions we compare:
+
+- **AM (A×M)**: set \(\beta=0\) so that \( B_{s,c} \) does not constrain occupancy; movement may be on/off via \(\mu\).
+- **ABM (A×B×M)**: interactions active with \(\beta>0\), using the same grid and species pool.
+
+We also use a placebo metaweb that rewires predator–prey links while preserving prey counts per consumer (and basal fraction), thereby maintaining degree/area structure but destroying trophic coherence. The difference between ABM and placebo isolates the causal effect of interaction structure.
+
+### Shapley decomposition and elasticities
+For a given loss step \( f \) we decompose the mean change in \( F \) across consumers using a three-factor Shapley partition:
+$$
+\Delta F = \Delta_A + \Delta_B + \Delta_M + \Delta_{\mathrm{syn}},
+$$
+where each component is the average marginal contribution of changing that factor between baseline and \( f \), averaged over all orderings of \( (A,B,M) \). Elasticity shares are defined as
+$$
+S_X = \frac{\langle |\Delta_X|\rangle}{\langle |\Delta_A|\rangle+\langle |\Delta_B|\rangle+\langle |\Delta_M|\rangle},\quad X\in\{A,B,M\},
+$$
+with brackets denoting a mean over consumers. These shares diagnose the dominant failure mode (climate, prey support, or connectivity) at a chosen loss \( f^* \).
+
+### Geometry and ranking diagnostics
+We study the sensitivity to habitat-loss geometry in two ways.
+
+1. **Magnitude uplift (DiD):** the biotic amplification of loss,
+$$
+\mathrm{DiD}(f)=\overline{\Delta\mathrm{BSH}}_{\text{ABM}}(f)-\overline{\Delta\mathrm{BSH}}_{\text{AM}}(f),
+$$
+and the worst-case uplift \( \mathrm{WU}(f)=\max_g \Delta\mathrm{BSH}^{\text{ABM}}_g(f) - \max_g \Delta\mathrm{BSH}^{\text{AM}}_g(f) \), where \( g \) indexes geometries.
+2. **Rank shifts:** whether the worst geometry at \( f \) differs between AM and ABM. We summarize by the fraction of scenarios that flip.
+
+### Movement rule
+With movement off we set \( M_{s,c}\equiv 1 \) (no connectivity filter). With movement on, within the kept and climate-suitable cells of \( s \) we compute 4-neighbor connected components and set \( M_{s,c}=1 \) only if the component size \( \ge T \). This removes tiny climate slivers first; at moderate–high loss the remaining candidate area lies in larger components, making prey support the limiting lever (higher \( S_B \)).
+
+### Experimental factors (A, B, M)
+We vary abiotic niche structure \( A \) (neutral/intermediate/divergent), biotic strength \( B \) (none/soft/strong via \( \beta \) and diet caps), and movement \( M \) (off/on via \( \mu \) and \( T \)). Main-text figures use a canonical regime (e.g. intermediate or divergent A, strong B, movement on) and report sensitivity in the supplement.
+
+### Management toy policy
+We evaluate three cell-prioritization policies given a budget \( K=1-f \): Random, Climate-only (rank cells by baseline \( \bar A\times\bar M \)), and Interaction-aware (rank by baseline \( \bar F=\bar A\times \bar B \times \bar M \)). We compute the realized \( \overline{\Delta\mathrm{BSH}}(f) \) under each policy and report the benefit vs random and the placebo check (interaction-aware on a rewired metaweb).
+
+
+
+
+
+
+
+
+
+
+
