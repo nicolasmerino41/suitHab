@@ -1,2 +1,2 @@
 # suitHab (Suitable Habitats)
-suitHab is a simulation framework to study how climate niches, trophic interactions, and habitat loss shape species’ suitable habitats.
+suitHab is a simulation framework to study how climatic niches, trophic interactions, and habitat loss shape species’ suitable habitats.
