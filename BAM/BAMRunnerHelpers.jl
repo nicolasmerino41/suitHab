@@ -357,7 +357,8 @@ B_level ∈ {:none,:soft,:strong}
 """
 function build_pool_from_axes(
     rng::AbstractRNG; S::Int, basal_frac::Float64,
-    A_level::Symbol, B_level::Symbol
+    A_level::Symbol, B_level::Symbol,
+    specialist_frac::Float64=0.30
 )
     # ── Abiotic (niche) setup ──────────────────────────────────────────────
     niche_mode = :uniform
@@ -403,32 +404,53 @@ function build_pool_from_axes(
     if isfinite(diet_cap)
         _trim_diets!(rng, pool, diet_cap)
     end
+    # --- make a fraction of consumers true specialists (diet_cap=1)
+    # pass specialist_frac via kwargs from the caller; default 0.30 if not provided
+    # specialist_frac = haskey(Base.kwarg_decl.(methods(build_pool_from_axes))[1].sig.parameters[end], :specialist_frac) ? specialist_frac : 0.30
+    if specialist_frac > 0
+        cons = findall(!, pool.basal)
+        ns = max(0, min(length(cons), round(Int, specialist_frac * length(cons))))
+        if ns > 0
+            for s in Random.shuffle!(rng, copy(cons))[1:ns]
+                if !isempty(pool.E[s])
+                    pool.E[s] = [rand(rng, pool.E[s])]   # keep exactly 1 prey
+                end
+            end
+        end
+    end
     return pool
 end
 
 "Translate B_level and M_level into BAM & movement parameters."
-function bam_from_axes(; B_level::Symbol, M_level::Symbol,
-                       α::Float64=1.0, τA::Float64=0.35, τocc::Float64=0.42)
+function bam_from_axes(
+    ; B_level::Symbol, M_level::Symbol,
+    α::Float64=1.0, τA::Float64=0.5, τocc::Float64=0.35,
+    β_override::Union{Nothing,Float64}=nothing, γ_override::Union{Nothing,Float64}=nothing
+)
     β, γ = 0.0, 2.0
     if B_level === :none
-        β, γ = 0.0, 2.0                  # ignore B
+        β, γ = 0.0, 2.0
     elseif B_level === :soft
-        β, γ = 1.6, 3.0                  # matters modestly
+        β, γ = 1.2, 3.0
     elseif B_level === :strong
-            β, γ = 4.0, 7.0              # sharp/strong dependence
+        β, γ = 3.0, 7.0
     else
         error("Unknown B_level $B_level")
     end
+    if β_override !== nothing; β = β_override; end
+    if γ_override !== nothing; γ = γ_override; end
+
     μ, mode = 0.0, :none
     if M_level === :off
         μ, mode = 0.0, :none
     elseif M_level === :on
-        μ, mode = 0.8, :component        # movement contributes strongly
+        μ, mode = 0.8, :component
     else
         error("Unknown M_level $M_level")
     end
-    (bam=BAMParams(; α=α, β=β, μ=μ, γ=γ, τA=τA, τocc=τocc),
-     mp=MovementParams(; mode=mode, T=6))   # T overwritten later by scaling
+
+    return (bam=BAMParams(; α=α, β=β, μ=μ, γ=γ, τA=τA, τocc=τocc),
+            mp=MovementParams(; mode=mode, T=8))
 end
 
 # ╭─────────────────────────────
