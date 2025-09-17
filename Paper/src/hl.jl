@@ -37,7 +37,7 @@ function clustered_mask(rng::AbstractRNG, nx::Int, ny::Int, keep_frac::Float64; 
     .!removed
 end
 
-function front_mask(rng::AbstractRNG, xy::Matrix{Float64}, keep_frac::Float64; axis::Symbol=:x, noise::Float64=0.0)
+function front_mask(rng::AbstractRNG, xy::Matrix{Float64}, keep_frac::Float64; axis::Symbol=:x, noise::Float64=0.05)
     C = size(xy,2)
     coord = axis === :x ? view(xy,1,:) : view(xy,2,:)
     q = quantile(coord, 1 - keep_frac)
