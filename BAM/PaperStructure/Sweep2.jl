@@ -216,13 +216,16 @@ function plot_critical_map(res)
     display(fig)
     return fig
 end
+
 # Amplify biotic effect and map where it appears
-res = sweep_critical_map(; A_level=:intermediate,
-                         fstar=0.6,
-                         M_level=:off,               # headline: no screening
-                         λ_list=0.0:0.1:1.0,         # climate sorting strength
-                         cap_list=[2,3,4,6,9999],    # 9999 = effectively ∞ (no cap)
-                         density=0.12, β_strong=4.0, ξ_align=0.06,
-                         seeds_pool=1:4, seeds_mask=1:4)
+res = sweep_critical_map(
+    ; A_level=:intermediate,
+    fstar=0.6,
+    M_level=:off,               # headline: no screening
+    λ_list=0.0:0.1:1.0,         # climate sorting strength
+    cap_list=[2,3,4,6,9999],    # 9999 = effectively ∞ (no cap)
+    density=0.12, β_strong=4.0, ξ_align=0.06,
+    seeds_pool=1:4, seeds_mask=1:4
+)
 
 fig = plot_critical_map(res)

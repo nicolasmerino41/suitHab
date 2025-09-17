@@ -223,8 +223,10 @@ function sweep_theta_lambda(; θ_list=0.5:0.05:0.8, λ_list=0.0:0.1:1.0, fstar=0
     return fig, H
 end
 
-fig, non, bio = show_biotic_showcase(; A_level=:intermediate, M_level=:on,
+fig, non, bio = show_biotic_showcase(
+    ; A_level=:intermediate, M_level=:on,
     λ_align=0.9, ξ_align=0.06, diet_cap=2, density=0.08,
     bmode=:frac, θB=0.7, β=4.5, τA=0.48, τocc=0.45,
-    front_axis=:x, front_noise=0.0)
+    front_axis=:x, front_noise=0.0
+)
 

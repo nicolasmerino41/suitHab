@@ -485,12 +485,12 @@ function plot_dashboard(; nx::Int=60, ny::Int=60, S::Int=150, basal_frac::Float6
 end
 
 # Example dashboard for a “high-contrast” corner
-_ = plot_dashboard(
-    ; nx=60, ny=60, S=150,
-    A_level=:divergent, B_level=:strong, M_level=:on,
-    loss_fracs=0.2:0.1:0.8, show_loss_for_fingerprints=0.6,
-    T_frac_on=0.03
-)
+# _ = plot_dashboard(
+#     ; nx=60, ny=60, S=150,
+#     A_level=:divergent, B_level=:strong, M_level=:on,
+#     loss_fracs=0.2:0.1:0.8, show_loss_for_fingerprints=0.6,
+#     T_frac_on=0.03
+# )
 
 """
 audit_phase_rule(loss_pick=0.6) — compute baseline indices for each combo,
@@ -532,4 +532,4 @@ function audit_phase_rule(; nx::Int=60, ny::Int=60, S::Int=150, basal_frac::Floa
     return out
 end
 
-A = audit_phase_rule(; loss_pick=0.6)
+# A = audit_phase_rule(; loss_pick=0.6)

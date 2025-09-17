@@ -380,7 +380,6 @@ function policy_curves(; grid, pool, bam_abm, mp_abm, bam_am, mp_am,
 end
 
 # -------------------- RUN: generate the four figures --------------------
-
 # Canonical regime + minimal nudge
 FIGA = figure_A_AM_vs_ABM(; A_level=:divergent, B_level=:soft, M_level=:on,
                                 T=6, loss_fracs=0.2:0.1:0.8, seeds_pool=1:4, seeds_mask=1:6)
