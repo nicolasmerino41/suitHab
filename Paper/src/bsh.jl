@@ -27,7 +27,7 @@ end
 MovementParams(; mode::Symbol=:none, T::Int=8) = MovementParams(mode,T)
 
 # Abiotic suitability A[s,c] (Gaussian niche around species "optimum" equal to climate value)
-function abiotic_matrix(pool::SpeciesPool, grid::Grid; niche_width::Float64=0.12, seed::Int=1)
+function abiotic_matrix(pool::SpeciesPool, grid::Grid; niche_width::Float64=0.08, seed::Int=1)
     rng = MersenneTwister(seed)
     # map each species to a niche center uniformly in [0,1]
     mu = rand(rng, pool.S)
@@ -67,14 +67,18 @@ function movement_gate(grid::Grid, A::Matrix{Float64}, keep::BitVector; τA::Flo
     M
 end
 
-"AM occupancy: A≥τA & kept (movement OFF). Returns P (S×C) and species BSH."
+"AM occupancy: A≥τA & kept; if movement=:component, also require component size ≥ T."
 function assemble_AM(pool::SpeciesPool, grid::Grid, A::Matrix{Float64}, keep::BitVector; pars::BAMParams)
     S, C = pool.S, grid.C
+    # movement mask per species (or all true if OFF)
+    M = pars.movement === :off ? trues(S, C) :
+        movement_gate(grid, A, keep; τA=pars.τA, T=pars.T)
+
     P = falses(S, C)
     @inbounds for s in 1:S, i in 1:C
-        P[s,i] = keep[i] & (A[s,i] ≥ pars.τA)
+        P[s,i] = keep[i] & (A[s,i] ≥ pars.τA) & M[s,i]
     end
-    bsh = [sum(@view P[s,:])/C for s in 1:S]
+    bsh = [sum(@view P[s,:]) / C for s in 1:S]
     P, bsh
 end
 
@@ -194,12 +198,18 @@ function pfail_curve(;
                    g===:clustered ? HL.clustered_mask(rng, nx, ny, keepfrac; nseeds=8) :
                                     HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
             bam = assemble_BAM(pool, grid, A, keep; pars=pars)
-            # among A-suitable kept cells for consumers, compute prey gate failure
+            # among A-suitable kept cells (and movement-passing if M is on), compute prey-gate failure
             cons = [s for s in 1:pool.S if !pool.basal[s]]
+
+            # movement mask used for the denominator if M is on
+            M = pars.movement === :off ? trues(pool.S, grid.C) :
+                movement_gate(grid, A, keep; τA=pars.τA, T=pars.T)
+
             maskA = falses(pool.S, grid.C)
             for s in cons, i in 1:grid.C
-                maskA[s,i] = keep[i] & (A[s,i] ≥ pars.τA)
+                maskA[s,i] = keep[i] & (A[s,i] ≥ pars.τA) & M[s,i]
             end
+
             fail = 0; denom=0
             for s in cons, i in 1:grid.C
                 if maskA[s,i]
