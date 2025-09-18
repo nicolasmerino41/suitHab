@@ -3,6 +3,7 @@ module Metawebs
 using Random, Statistics, StatsBase, Distributions
 
 export SpeciesPool, build_metaweb_archetype, metaweb_diagnostics, rewire_placebo
+export build_metaweb_niche, build_metaweb_modular, build_metaweb_powerlaw
 
 struct SpeciesPool
     S::Int
@@ -106,5 +107,113 @@ function rewire_placebo(rng::AbstractRNG, pool::SpeciesPool; nswap::Int=5000)
     end
     SpeciesPool(pool.S, copy(pool.masses), copy(pool.basal), prey)
 end
+
+# =============== helpers (local to this file) =================================
+# build a pool from masses + prey lists; basal are those with 0 prey
+function _pool_from_prey(masses, prey; basal_frac=0.35)
+    S = length(masses)
+    order = sortperm(masses)
+    nB = clamp(round(Int, basal_frac*S), 1, S)  # at least one basal
+    basal = falses(S)
+    basal[order[1:nB]] .= true
+    return SpeciesPool(S, masses, basal, prey)
+end
+
+# always respect trophic ordering: prey indices must be < predator index
+# (we sort species by mass ascending and work in that order)
+function _sorted_masses(rng::AbstractRNG, S::Int)
+    logm = collect(range(log(1e-2), log(10.0); length=S))
+    shuffle!(rng, logm)
+    masses = exp.(logm)
+    sort(masses)  # ascending
+end
+
+# =============== 1) Classic niche-model-ish generator =========================
+"""
+    build_metaweb_niche(rng; S=175, Ctarget=0.10, beta=1.5)
+
+Classic niche-like interval model on [0,1].
+- Each species draws a niche value `n ~ U(0,1)` (we set it proportional to rank/S).
+- Feeding range `r ~ Beta(1,beta) * n` (controls connectance).
+- Center `c ~ U(r/2, n)`; prey are those with niche `nq` in `[c-r/2, c+r/2]` and lower rank.
+`Ctarget` is only a rough guide via `beta`.
+"""
+function build_metaweb_niche(rng::AbstractRNG; S::Int=175, Ctarget::Float64=0.10, beta::Float64=1.5)
+    masses = _sorted_masses(rng, S)
+    # niche coordinate proportional to rank (intervality)
+    n = collect(range(0, 1; length=S+2))[2:end-1]  # avoid exact 0/1
+    prey = [Int[] for _ in 1:S]
+    # simple mapping: larger beta -> narrower ranges -> lower connectance
+    β = max(beta, 1e-3)
+    for s in 2:S
+        ns = n[s]
+        r  = rand(rng, Beta(1, β)) * ns
+        c  = rand(rng) * (ns - r/2) + r/2
+        lo, hi = c - r/2, c + r/2
+        for q in 1:s-1
+            if (n[q] ≥ lo) & (n[q] ≤ hi)
+                push!(prey[s], q)
+            end
+        end
+        isempty(prey[s]) && push!(prey[s], rand(rng, 1:s-1))   # ensure ≥1 prey
+    end
+    _pool_from_prey(masses, prey)
+end
+
+# =============== 2) Simple modular (blocky) web ===============================
+"""
+    build_metaweb_modular(rng; S=175, K=3, p_in=0.25, p_out=0.03)
+
+Split the mass-ordered species into `K` contiguous modules.
+Consumers connect to lower-rank prey within-module with prob `p_in`,
+and to other modules with prob `p_out` (both capped to lower ranks).
+Gives tunable modularity with a bottom-heavy trophic order.
+"""
+function build_metaweb_modular(rng::AbstractRNG; S::Int=175, K::Int=3, p_in::Float64=0.25, p_out::Float64=0.03)
+    masses = _sorted_masses(rng, S)
+    prey   = [Int[] for _ in 1:S]
+    # module boundaries (approximately equal sizes)
+    edges = round.(Int, range(1, S; length=K+1))
+    modid = zeros(Int, S)
+    for k in 1:K
+        for i in edges[k]:min(edges[k+1], S)
+            modid[i] = k
+        end
+    end
+    for s in 2:S
+        for q in 1:s-1
+            pin = (modid[s] == modid[q]) ? p_in : p_out
+            if rand(rng) < pin
+                push!(prey[s], q)
+            end
+        end
+        isempty(prey[s]) && push!(prey[s], rand(rng, 1:s-1))
+    end
+    _pool_from_prey(masses, prey)
+end
+
+# =============== 3) Power-law diet heterogeneity ==============================
+"""
+    build_metaweb_powerlaw(rng; S=175, kmin=1, kmax=8, alpha=2.4)
+
+Assign each consumer a diet size `k ~ Zipf(α)` truncated to [kmin,kmax],
+then choose that many lower-rank prey uniformly without replacement.
+Captures heavy-tailed diet heterogeneity without changing trophic order.
+"""
+function build_metaweb_powerlaw(rng::AbstractRNG; S::Int=175, kmin::Int=1, kmax::Int=8, alpha::Float64=2.4)
+    masses = _sorted_masses(rng, S)
+    prey   = [Int[] for _ in 1:S]
+    for s in 2:S
+        support = max(1, min(kmax, s-1))
+        k = clamp(Int(floor((rand(rng)^(-1/(alpha-1))))), kmin, support)
+        k = max(kmin, min(k, support))
+        cand = randperm(rng, s-1)
+        prey[s] = cand[1:k]
+        isempty(prey[s]) && push!(prey[s], s-1)
+    end
+    _pool_from_prey(masses, prey)
+end
+
+
 
 end # module
