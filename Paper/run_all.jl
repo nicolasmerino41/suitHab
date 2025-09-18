@@ -47,7 +47,7 @@ end
 
 ########################### REMOVE ME LATER ############################
 # movement ON to make geometry relevant
-pars = BSH.BAMParams(; τA=0.6, τB=0.6, τocc=0.2, γ=3.0, movement=:off, T=10)
+pars = BSH.BAMParams(; τA=0.6, τB=0.6, τocc=0.2, γ=3.0, movement=:component, T=10)
 
 # basal squeezed to low climate + consumers aligned to prey
 A_fn_punch = (pool, grid; seed=1) -> BSH.abiotic_matrix_aligned(
@@ -65,14 +65,14 @@ pfail     = BSH.pfail_curve(; rng, pool=pool_low, grid=grid_grad, pars,
 # movement OFF
 pars_off = BSH.BAMParams(; τA=0.5, τB=0.55, τocc=0.2, γ=3.0, movement=:off, T=6)
 # movement ON (connected component gate with size T)
-pars_on  = BSH.BAMParams(; τA=0.5, τB=0.55, τocc=0.2, γ=3.0, movement=:component, T=6)
+pars_on  = BSH.BAMParams(; τA=0.5, τB=0.5, τocc=0.2, γ=3.0, movement=:component, T=8)
 # STRONG COMBINATION
 pars_strong = BSH.BAMParams(; τA=0.55, τB=0.50, movement=:component, T=8)
 
-pars = pars_strong # TODO CHOOSE DEPENDING ON YOUR NEEDS
+pars = pars_on # TODO CHOOSE DEPENDING ON YOUR NEEDS
 
 loss_fracs = 0.2:0.05:0.8
-fstar      = 0.76
+fstar      = 0.6
 at_index   = findfirst(==(fstar), collect(loss_fracs))
 
 # ------------------------------------
@@ -103,7 +103,7 @@ save("Paper/figs/Fig1_core.png", fig1); display(fig1)
 # 1.1) Fig.1.1 — FigsSweeps.sweep_fig1_3x3
 # ------------------------------------
 # choose which grid shows contrasts best (ridge often pops); swap to grid_grad/patch/mosa as desired
-grid_for_sweep = "mosaic"
+grid_for_sweep = "gradient"
 
 # 3×3 per archetype (movement ON). Change tauB_list/T_list inside if you want.
 FigSweeps.sweep_fig1_3x3(
@@ -127,7 +127,7 @@ FigSweeps.sweep_fig1_3x3(
 # ------------------------------------
 # 1.2) Fig.1 + P_fail — 3×3 per archetype, movement OFF and ON
 # ------------------------------------
-grid_for_sweep = "ridge"   # or "gradient" / "patchy" / "ridge"
+grid_for_sweep = "gradient"   # or "gradient" / "patchy" / "ridge" / "mosaic"
 
 # movement OFF
 FigSweeps.sweep_fig1_pair_3x3(
@@ -202,7 +202,7 @@ Fig2Metrics.penalty_vs_diet(; rng, pool, grid, pars,
     out="Paper/figs/penalty_vs_diet_front.png")
 
 # ------------------------------------
-# 4) Fig.3 — rank small multiples across archetypes × grids at f*
+# 3) Fig.3 — rank small multiples across archetypes × grids at f*
 # ------------------------------------
 combos = [("High-R, gradient", pool_high, grid_grad),
           ("Low-R, gradient",  pool_low,  grid_grad),
@@ -228,7 +228,7 @@ fig3 = Figs.fig3_rank_smallmultiples(ranks; title="Worst geometry at f* = $(fsta
 save("Paper/figs/Fig3_rank.png", fig3); display(fig3)
 
 # ------------------------------------
-# 5) Fig.4 — regime maps over (D, R)
+# 4) Fig.4 — regime maps over (D, R)
 # ------------------------------------
 Dvals = [Grids.climate_tail_index(g) for g in (grid_grad, grid_patch, grid_mosa, grid_ridge)]
 Rvals = Float64[]
@@ -251,8 +251,6 @@ end
 fig4 = Figs.fig4_regimemap(Dvals, Rvals, Zdid, Zflip; title="Regime map at f* = $(fstar)")
 save("Paper/figs/Fig4_regimes.png", fig4); display(fig4)
 
-@info "Done. Figures saved in ./figs"
-
 # === grid maps (already fixed by you) =========================================include("src/plot_grids.jl")
 plot_all_grids(; nx=nx, ny=ny, out="Paper/figs/Grids.png")
 
@@ -273,6 +271,7 @@ variety_pools = [
     Metawebs.build_metaweb_modular(rng; S=S, K=3, p_in=0.30, p_out=0.04),
     Metawebs.build_metaweb_powerlaw(rng; S=S, alpha=2.4, kmax=8)
 ]
+
 variety_names = ["low","mid","high","niche_b1.8","mod_K3","pow_a2.4"]
 MetawebDescriptive.plot_metaweb_spectrum(variety_pools; names=variety_names,
                                          outdir="Paper/figs/metawebs/")
@@ -280,7 +279,7 @@ MetawebDescriptive.plot_metaweb_spectrum(variety_pools; names=variety_names,
 # === Variety sweeps across more metawebs =====================================
 # choose which grid you want to showcase; swap "patchy"/"mosaic"/"ridge"/"gradient"
 MetawebVarietySweep.run_metaweb_variety_sweeps(
-    ; rng, grids_vec=grids_vec, grid_type="gradient",
+    ; rng, grids_vec=grids_vec, grid_type="patchy",
       S=S, tauB_list=[0.40,0.50,0.60], T_list=[6,8,12],
       movement=:component,    # try :off as well to compare
       τA=0.5, τocc=0.2, γ=3.0, loss_fracs=loss_fracs, seed_A=1,
