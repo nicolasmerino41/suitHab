@@ -45,13 +45,13 @@ $$
 \overline{\Delta\mathrm{BSH}}(f)=\text{mean over consumers } s.
 $$
 
-### Two lenses: climate-only (AM) vs full interactions (ABM)
+### Two lenses: climate-only (AM) vs full interactions (BAM)
 To isolate the role of biotic interactions we compare:
 
 - **AM (A×M)**: set \(\beta=0\) so that \( B_{s,c} \) does not constrain occupancy; movement may be on/off via \(\mu\).
-- **ABM (A×B×M)**: interactions active with \(\beta>0\), using the same grid and species pool.
+- **BAM (B×A×M)**: interactions active with \(\beta>0\), using the same grid and species pool.
 
-We also use a placebo metaweb that rewires predator–prey links while preserving prey counts per consumer (and basal fraction), thereby maintaining degree/area structure but destroying trophic coherence. The difference between ABM and placebo isolates the causal effect of interaction structure.
+We also use a placebo metaweb that rewires predator–prey links while preserving prey counts per consumer (and basal fraction), thereby maintaining degree/area structure but destroying trophic coherence. The difference between BAM and placebo isolates the causal effect of interaction structure.
 
 ### Shapley decomposition and elasticities
 For a given loss step \( f \) we decompose the mean change in \( F \) across consumers using a three-factor Shapley partition:
@@ -69,10 +69,10 @@ We study the sensitivity to habitat-loss geometry in two ways.
 
 1. **Magnitude uplift (DiD):** the biotic amplification of loss,
 $$
-\mathrm{DiD}(f)=\overline{\Delta\mathrm{BSH}}_{\text{ABM}}(f)-\overline{\Delta\mathrm{BSH}}_{\text{AM}}(f),
+\mathrm{DiD}(f)=\overline{\Delta\mathrm{BSH}}_{\text{BAM}}(f)-\overline{\Delta\mathrm{BSH}}_{\text{AM}}(f),
 $$
-and the worst-case uplift \( \mathrm{WU}(f)=\max_g \Delta\mathrm{BSH}^{\text{ABM}}_g(f) - \max_g \Delta\mathrm{BSH}^{\text{AM}}_g(f) \), where \( g \) indexes geometries.
-2. **Rank shifts:** whether the worst geometry at \( f \) differs between AM and ABM. We summarize by the fraction of scenarios that flip.
+and the worst-case uplift \( \mathrm{WU}(f)=\max_g \Delta\mathrm{BSH}^{\text{BAM}}_g(f) - \max_g \Delta\mathrm{BSH}^{\text{AM}}_g(f) \), where \( g \) indexes geometries.
+2. **Rank shifts:** whether the worst geometry at \( f \) differs between AM and BAM. We summarize by the fraction of scenarios that flip.
 
 ### Movement rule
 With movement off we set \( M_{s,c}\equiv 1 \) (no connectivity filter). With movement on, within the kept and climate-suitable cells of \( s \) we compute 4-neighbor connected components and set \( M_{s,c}=1 \) only if the component size \( \ge T \). This removes tiny climate slivers first; at moderate–high loss the remaining candidate area lies in larger components, making prey support the limiting lever (higher \( S_B \)).

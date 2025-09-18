@@ -27,7 +27,7 @@ end
 MovementParams(; mode::Symbol=:none, T::Int=8) = MovementParams(mode,T)
 
 # Abiotic suitability A[s,c] (Gaussian niche around species "optimum" equal to climate value)
-function abiotic_matrix(pool::SpeciesPool, grid::Grid; niche_width::Float64=0.08, seed::Int=1)
+function abiotic_matrix(pool::SpeciesPool, grid::Grid; niche_width::Float64=0.12, seed::Int=1)
     rng = MersenneTwister(seed)
     # map each species to a niche center uniformly in [0,1]
     mu = rand(rng, pool.S)
