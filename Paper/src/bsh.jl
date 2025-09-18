@@ -1,6 +1,6 @@
 module BSH
 
-using Random, Statistics
+using Random, Statistics, Distributions
 using ..Grids
 using ..Metawebs
 using ..HL
@@ -83,15 +83,17 @@ function assemble_AM(pool::SpeciesPool, grid::Grid, A::Matrix{Float64}, keep::Bi
 end
 
 "BAM occupancy: requires A≥τA, kept, movement gate, and prey sufficiency ≥ τB."
-function assemble_BAM(pool::SpeciesPool, grid::Grid, A::Matrix{Float64}, keep::BitVector; pars::BAMParams)
+# Biotic occupancy with optional prey sufficiency aggregator.
+function assemble_BAM(
+    pool::Metawebs.SpeciesPool, grid::Grids.Grid, A::Matrix{Float64}, keep::BitVector;
+    pars::BAMParams, agg::Symbol=:mean, kreq::Int=1
+)
     S, C = pool.S, grid.C
-    # movement mask per species (or all true if OFF)
     M = pars.movement === :off ? trues(S,C) : movement_gate(grid, A, keep; τA=pars.τA, T=pars.T)
 
-    P = falses(S, C)                      # occupancy
-    preyfrac = zeros(Float64, S, C)       # mean prey presence (for diagnostics)
+    P = falses(S, C)
+    preyfrac = zeros(Float64, S, C)
 
-    # basal first by mass
     order = sortperm(pool.masses)
     for s in order
         if pool.basal[s]
@@ -101,15 +103,25 @@ function assemble_BAM(pool::SpeciesPool, grid::Grid, A::Matrix{Float64}, keep::B
         else
             pr = pool.prey[s]
             if isempty(pr)
-                @inbounds for i in 1:C
-                    P[s,i] = false
-                end
+                @inbounds for i in 1:C; P[s,i] = false; end
             else
                 @inbounds for i in 1:C
                     if keep[i] & (A[s,i] ≥ pars.τA) & M[s,i]
-                        m = mean(@view P[pr, i])
-                        preyfrac[s,i] = m
-                        P[s,i] = (m ≥ pars.τB)
+                        if agg === :mean
+                            m = mean(@view P[pr, i]); preyfrac[s,i] = m
+                            P[s,i] = (m ≥ pars.τB)
+                        elseif agg === :min
+                            # most stringent: all prey present
+                            ok = all(@view P[pr, i]); preyfrac[s,i] = ok ? 1.0 : 0.0
+                            P[s,i] = ok
+                        elseif agg === :kofn
+                            # require at least kreq prey present
+                            n_ok = count(@view P[pr, i]); n_tot = length(pr)
+                            preyfrac[s,i] = n_tot == 0 ? 0.0 : n_ok / n_tot
+                            P[s,i] = (n_ok ≥ kreq)
+                        else
+                            error("Unknown agg = $agg (use :mean, :min, or :kofn)")
+                        end
                     else
                         P[s,i] = false
                     end
@@ -121,19 +133,24 @@ function assemble_BAM(pool::SpeciesPool, grid::Grid, A::Matrix{Float64}, keep::B
     (; P, bsh, preyfrac)
 end
 
+
 "Relative loss curves for AM and BAM across geometries and loss fractions."
 function relative_loss_curves(
     rng::AbstractRNG, pool::SpeciesPool, grid::Grid, pars::BAMParams;
-    loss_fracs=0.2:0.2:0.8, seed_A::Int=1
+    loss_fracs=0.2:0.2:0.8, seed_A::Int=1, A_fn=abiotic_matrix, 
+    agg::Symbol=:mean, kreq::Int=1
 )
-    A = abiotic_matrix(pool, grid; seed=seed_A)
+    # A = abiotic_matrix(pool, grid; seed=seed_A)
+    A = A_fn(pool, grid; seed=seed_A)
     geometries = (:random, :clustered, :front)
     nx, ny = grid.nx, grid.ny
 
     # baseline (no HL)
     keep0 = trues(grid.C)
     _, b0_AM  = assemble_AM(pool, grid, A, keep0; pars=pars)
-    bam = assemble_BAM(pool, grid, A, keep0; pars=pars)
+    # bam = assemble_BAM(pool, grid, A, keep0; pars=pars)
+    # b0_BAM = bam.bsh
+    bam = assemble_BAM(pool, grid, A, keep0; pars=pars, agg=agg, kreq=kreq)
     b0_BAM = bam.bsh
 
     res = Dict{Symbol,Any}()
@@ -145,7 +162,8 @@ function relative_loss_curves(
                    g===:clustered ? HL.clustered_mask(rng, nx, ny, keepfrac; nseeds=8) :
                                     HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
             _, bAM = assemble_AM(pool, grid, A, keep; pars=pars)
-            bBAM = assemble_BAM(pool, grid, A, keep; pars=pars).bsh
+            # bBAM = assemble_BAM(pool, grid, A, keep; pars=pars).bsh
+            bBAM = assemble_BAM(pool, grid, A, keep; pars=pars, agg=agg, kreq=kreq).bsh
 
             ΔAM  = mean(bAM)  - mean(b0_AM)
             ΔBAM = mean(bBAM) - mean(b0_BAM)
@@ -162,19 +180,24 @@ end
 "Per-species relative losses at a chosen f* for CDFs."
 function per_species_relative_loss(
     rng::AbstractRNG, pool::SpeciesPool, grid::Grid, pars::BAMParams;
-    fstar::Float64=0.6, geometry::Symbol=:random, seed_A::Int=1
+    fstar::Float64=0.6, geometry::Symbol=:random, seed_A::Int=1,
+    A_fn=abiotic_matrix, agg::Symbol=:mean, kreq::Int=1
 )
-    A = abiotic_matrix(pool, grid; seed=seed_A)
+    # A = abiotic_matrix(pool, grid; seed=seed_A)
+    A = A_fn(pool, grid; seed=seed_A)
+
     keep0 = trues(grid.C)
     _, b0_AM  = assemble_AM(pool, grid, A, keep0; pars=pars)
-    b0_BAM    = assemble_BAM(pool, grid, A, keep0; pars=pars).bsh
+    # b0_BAM    = assemble_BAM(pool, grid, A, keep0; pars=pars).bsh
+    b0_BAM = assemble_BAM(pool, grid, A, keep0; pars=pars, agg=agg, kreq=kreq).bsh
 
     keepfrac = 1 - fstar
     keep = geometry===:random    ? HL.random_mask(rng, grid.C, keepfrac) :
            geometry===:clustered ? HL.clustered_mask(rng, grid.nx, grid.ny, keepfrac; nseeds=8) :
                                    HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
     _, bAM = assemble_AM(pool, grid, A, keep; pars=pars)
-    bBAM   = assemble_BAM(pool, grid, A, keep; pars=pars).bsh
+    # bBAM   = assemble_BAM(pool, grid, A, keep; pars=pars).bsh
+    bBAM   = assemble_BAM(pool, grid, A, keep;  pars=pars, agg=agg, kreq=kreq).bsh
 
     relAM  = (bAM .- b0_AM) ./ (b0_AM .+ eps())
     relBAM = (bBAM .- b0_BAM) ./ (b0_BAM .+ eps())
@@ -184,9 +207,11 @@ end
 "P_fail curve among A-suitable kept cells (BAM only)."
 function pfail_curve(;
     rng::AbstractRNG, pool::SpeciesPool, grid::Grid, pars::BAMParams,
-    loss_fracs=0.2:0.2:0.8, seed_A::Int=1
+    loss_fracs=0.2:0.2:0.8, seed_A::Int=1, A_fn=abiotic_matrix, agg::Symbol=:mean, kreq::Int=1
 )
-    A = abiotic_matrix(pool, grid; seed=seed_A)
+    # A = abiotic_matrix(pool, grid; seed=seed_A)
+    A = A_fn(pool, grid; seed=seed_A)
+    
     nx, ny = grid.nx, grid.ny
     geometries = (:random, :clustered, :front)
     out = Dict{Symbol,Any}()
@@ -197,7 +222,10 @@ function pfail_curve(;
             keep = g===:random    ? HL.random_mask(rng, grid.C, keepfrac) :
                    g===:clustered ? HL.clustered_mask(rng, nx, ny, keepfrac; nseeds=8) :
                                     HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
-            bam = assemble_BAM(pool, grid, A, keep; pars=pars)
+            
+            # bam = assemble_BAM(pool, grid, A, keep; pars=pars)
+            bam = assemble_BAM(pool, grid, A, keep; pars=pars, agg=agg, kreq=kreq)
+            
             # among A-suitable kept cells (and movement-passing if M is on), compute prey-gate failure
             cons = [s for s in 1:pool.S if !pool.basal[s]]
 
@@ -227,12 +255,18 @@ end
 "Placebo: rewire metaweb and recompute relative loss curves (BAM only)."
 function placebo_curves(
     ; rng::AbstractRNG, pool::SpeciesPool, grid::Grid, pars::BAMParams,
-    loss_fracs=0.2:0.2:0.8, seed_A::Int=1
+    loss_fracs=0.2:0.2:0.8, seed_A::Int=1, A_fn=abiotic_matrix, agg::Symbol=:mean, kreq::Int=1
 )
     placebo = Metawebs.rewire_placebo(rng, pool; nswap=5000)
-    A = abiotic_matrix(placebo, grid; seed=seed_A)
+    
+    # A = abiotic_matrix(placebo, grid; seed=seed_A)
+    A = A_fn(placebo, grid; seed=seed_A)
+
     keep0 = trues(grid.C)
-    b0 = assemble_BAM(placebo, grid, A, keep0; pars=pars).bsh
+
+    # b0 = assemble_BAM(placebo, grid, A, keep0; pars=pars).bsh
+    b0 = assemble_BAM(placebo, grid, A, keep0; pars=pars, agg=agg, kreq=kreq).bsh
+
     geometries = (:random, :clustered, :front)
     nx, ny = grid.nx, grid.ny
     res = Dict{Symbol,Any}()
@@ -243,7 +277,8 @@ function placebo_curves(
             keep = g===:random    ? HL.random_mask(rng, grid.C, keepfrac) :
                    g===:clustered ? HL.clustered_mask(rng, nx, ny, keepfrac; nseeds=8) :
                                     HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
-            b = assemble_BAM(placebo, grid, A, keep; pars=pars).bsh
+            # b = assemble_BAM(placebo, grid, A, keep; pars=pars).bsh
+            b = assemble_BAM(placebo, grid, A, keep;  pars=pars, agg=agg, kreq=kreq).bsh
             Δ = mean(b) - mean(b0)
             push!(xs, f); push!(y, Δ/(mean(b0)+eps()))
         end
@@ -252,4 +287,56 @@ function placebo_curves(
     res
 end
 
+# --- NEW: abiotic_matrix_aligned ----------------------------------------------------------
+export abiotic_matrix_aligned
+
+"""
+Abiotic suitability with optional (i) basal climate bias and (ii) prey–consumer alignment.
+
+- `bias_basal` in [0,1]: 0.0 = uniform; 0.8 puts most basal optima on the low end of climate.
+- `align` in [0,1]: 0 = independent consumer optima; 1 = consumer optimum = mean(prey optima).
+- Separate niche widths for basal vs consumers allowed.
+"""
+function abiotic_matrix_aligned(
+    pool::Metawebs.SpeciesPool, grid::Grids.Grid;
+    niche_basal::Float64=0.10, niche_cons::Float64=0.12,
+    bias_basal::Float64=0.0, align::Float64=0.0,
+    seed::Int=1
+)
+    rng = MersenneTwister(seed)
+    S, C = pool.S, grid.C
+
+    μ = rand(rng, S)  # start uniform [0,1]
+
+    # bias basal to the low-climate side using a Beta distribution
+    if bias_basal > 0
+        # mean ≈ bias_basal; moderately concentrated (α+β≈10)
+        α = 1.0 + 9.0*bias_basal
+        β = 1.0 + 9.0*(1.0 - bias_basal)
+        for s in 1:S
+            pool.basal[s] && (μ[s] = rand(rng, Beta(α, β)))
+        end
+    end
+
+    # align consumers' optima toward the mean of their prey optima
+    if align > 0
+        for s in 1:S
+            pool.basal[s] && continue
+            pr = pool.prey[s]
+            if !isempty(pr)
+                μp = mean(@view μ[pr])
+                μ[s] = clamp((1-align)*μ[s] + align*μp, 0.0, 1.0)
+            end
+        end
+    end
+
+    A = Matrix{Float64}(undef, S, C)
+    @inbounds for s in 1:S, i in 1:C
+        σ = pool.basal[s] ? niche_basal : niche_cons
+        A[s,i] = exp(-((grid.climate[i] - μ[s])^2) / (2σ^2 + 1e-12))
+    end
+    A
+end
+
 end # module
+
