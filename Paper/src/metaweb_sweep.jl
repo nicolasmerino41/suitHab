@@ -9,8 +9,10 @@ using CairoMakie
 using ..Grids
 using ..Metawebs
 using ..BSH
+using ..HL
 
 export run_metaweb_sweep
+export run_realities_Aonly
 
 # ------------------------ utilities on SpeciesPool ----------------------------
 
@@ -160,6 +162,67 @@ function run_metaweb_sweep(;
     end
 
     out
+end
+
+"""
+run_realities_Aonly(; rng, grid, realities=:default, loss_fracs=0.2:0.1:0.8,
+                    S=200, basal_frac=0.25, seed_A=1, Npools=12, pool_seed0=1,
+                    geoms=(:random,:clustered,:front))
+
+Returns Dict{Symbol,NamedTuple} mapping each geometry to (loss, ABM, MAB, BAM),
+each a vector of A-only means (mean over consumers / original area).
+"""
+function run_realities_Aonly(; rng, grid, realities=:default,
+    loss_fracs=0.2:0.1:0.8, S::Int=200, basal_frac::Float64=0.25,
+    seed_A::Int=1, Npools::Int=12, pool_seed0::Int=1,
+    geoms::Tuple=(:random,:clustered,:front), τA::Float64=0.5)
+
+    # --- define three pool generators using your Metawebs API
+    build_ABM = () -> Metawebs.build_metaweb_archetype(rng; S, basal_frac, archetype=:low)   # tight niches / lower R
+    build_MAB = () -> Metawebs.build_metaweb_archetype(rng; S, basal_frac, archetype=:mid)   # broader niches
+    build_BAM = () -> Metawebs.build_metaweb_archetype(rng; S, basal_frac, archetype=:high)  # high R (biotic structure)
+
+    out = Dict{Symbol,NamedTuple}()
+
+    for g in geoms
+        A_ABM = Float64[]; A_MAB = Float64[]; A_BAM = Float64[]
+        for f in loss_fracs
+            keepfrac = 1 - f
+            keep = g === :random    ? HL.random_mask(rng, grid.C, keepfrac) :
+                   g === :clustered ? HL.clustered_mask(rng, grid.nx, grid.ny, keepfrac; nseeds=8) :
+                                      HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
+
+            vals_ABM = Float64[]; vals_MAB = Float64[]; vals_BAM = Float64[]
+
+            for k in 0:Npools-1
+                # new pool per replicate
+                pool_ABM = build_ABM()
+                pool_MAB = build_MAB()
+                pool_BAM = build_BAM()
+
+                # same A-building path as BSH uses (no assembly here)
+                A_ABM_full = BSH.abiotic_matrix(pool_ABM, grid; seed=seed_A + k)
+                A_MAB_full = BSH.abiotic_matrix(pool_MAB, grid; seed=seed_A + k)
+                A_BAM_full = BSH.abiotic_matrix(pool_BAM, grid; seed=seed_A + k)
+
+                A_ABM_mask = @view A_ABM_full[:, keep]
+                A_MAB_mask = @view A_MAB_full[:, keep]
+                A_BAM_mask = @view A_BAM_full[:, keep]
+
+                # mean climate-suitable area over consumers, normalized by ORIGINAL area
+                push!(vals_ABM, BSH.mean_Aonly_over_consumers_area0(A_ABM_mask, pool_ABM, grid.C; τA=τA))
+                push!(vals_MAB, BSH.mean_Aonly_over_consumers_area0(A_MAB_mask, pool_MAB, grid.C; τA=τA))
+                push!(vals_BAM, BSH.mean_Aonly_over_consumers_area0(A_BAM_mask, pool_BAM, grid.C; τA=τA))
+
+            end
+
+            push!(A_ABM, mean(vals_ABM))
+            push!(A_MAB, mean(vals_MAB))
+            push!(A_BAM, mean(vals_BAM))
+        end
+        out[g] = (loss=collect(loss_fracs), ABM=A_ABM, MAB=A_MAB, BAM=A_BAM)
+    end
+    return out
 end
 
 end # module
