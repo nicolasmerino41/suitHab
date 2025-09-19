@@ -7,7 +7,8 @@ using ..HL
 
 export BAMParams, abiotic_matrix, movement_gate, assemble_AM, assemble_BAM,
        relative_loss_curves, per_species_relative_loss, pfail_curve,
-       placebo_curves
+       placebo_curves, mean_BSH_over_consumers_area0, mean_Aonly_over_consumers_area0,
+       abiotic_matrix_aligned
 
 struct BAMParams
     τA::Float64      # abiotic cell suitability threshold
@@ -288,8 +289,6 @@ function placebo_curves(
 end
 
 # --- NEW: abiotic_matrix_aligned ----------------------------------------------------------
-export abiotic_matrix_aligned
-
 """
 Abiotic suitability with optional (i) basal climate bias and (ii) prey–consumer alignment.
 
@@ -338,5 +337,37 @@ function abiotic_matrix_aligned(
     A
 end
 
-end # module
+# mean over consumers of BSH / ORIGINAL area (AM or BAM)
+function mean_BSH_over_consumers_area0(rng, pool, grid, pars; A, keepmask, mode::Symbol,
+                                       agg::Symbol=:mean, kreq::Int=1)
+    # (A is the full S×C abiotic matrix on the original grid)
+    if count(keepmask) == 0
+        return 0.0
+    end
 
+    if mode === :AM
+        _, b = assemble_AM(pool, grid, A, keepmask; pars=pars)
+    elseif mode === :BAM
+        b = assemble_BAM(pool, grid, A, keepmask; pars=pars, agg=agg, kreq=kreq).bsh
+    else
+        error("mode must be :AM or :BAM")
+    end
+
+    # `b` is already fraction-of-original-area per species (uses grid.C internally)
+    return mean(b[.!pool.basal])
+end
+
+# mean over consumers of A-only (climate suitable) / ORIGINAL area
+function mean_Aonly_over_consumers_area0(A_masked::AbstractMatrix{<:Real},
+                                         pool, Cfull::Int; τA::Float64=0.5)
+    cons = findall(!, pool.basal)
+    isempty(cons) && return 0.0
+    svals = Float64[]
+    for s in cons
+        # count cells that are both kept (because A_masked is already masked) and A≥τA
+        push!(svals, count(@view(A_masked[s, :]) .>= τA) / Cfull)
+    end
+    return mean(svals)
+end
+
+end # module
