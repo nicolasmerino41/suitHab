@@ -5,6 +5,8 @@ using Statistics, Printf
 
 export fig1_core, fig2_cdfs, fig3_rank_smallmultiples, fig4_regimemap
 export fig2_metric_numbers
+export fig_abs_bsh_vs_loss
+export fig_realities_Aonly
 
 palette_geom() = Dict(:random => RGBf(0.26,0.47,0.96),
                       :clustered => RGBf(0.96,0.59,0.12),
@@ -138,6 +140,41 @@ function fig4_regimemap(Dgrid::Vector{Float64}, Rweb::Vector{Float64},
     hm2 = heatmap!(ax2, Dgrid, Rweb, Zflip'; colormap=:plasma, interpolate=false)
     Colorbar(fig[1,4], hm2, width=12)
 
+    return fig
+end
+
+"Plot absolute BSH curves (AM dashed, BAM solid) for several geometries."
+function fig_abs_bsh_vs_loss(curves::Dict{Symbol,NamedTuple}; title::AbstractString="")
+    geoms = collect(keys(curves))
+    fig = Figure(; size=(1050, 340))
+    for (j,g) in enumerate(geoms)
+        dat = curves[g]
+        ax = Axis(fig[1,j], title=String(g),
+                  xlabel="area lost (fraction)",
+                  ylabel="BSH (mean over consumers / original area)")
+        lines!(ax, dat.loss, dat.AM;  color=:gray35, linestyle=:dash,  linewidth=3, label="AM")
+        lines!(ax, dat.loss, dat.BAM; color=:black,  linestyle=:solid, linewidth=3, label="BAM")
+        hlines!(ax, [0.0], color=(:gray,0.4), linestyle=:dot)
+        axislegend(ax, position=:lb)
+    end
+    isempty(title) || Label(fig[0, 1:length(geoms)], title, fontsize=18, tellwidth=false)
+    return fig
+end
+
+function fig_realities_Aonly(curves::Dict{Symbol,NamedTuple}; title::AbstractString="")
+    geoms = collect(keys(curves))
+    fig = Figure(; size=(1050,340))
+    for (j,g) in enumerate(geoms)
+        dat = curves[g]
+        ax = Axis(fig[1,j], title=String(g),
+                  xlabel="area lost (fraction)",
+                  ylabel="A-only (mean over consumers / original area)")
+        lines!(ax, dat.loss, dat.ABM; color=:dodgerblue, linewidth=3, label="ABM")
+        lines!(ax, dat.loss, dat.MAB; color=:darkorange, linewidth=3, label="MAB")
+        lines!(ax, dat.loss, dat.BAM; color=:seagreen,  linewidth=3, label="BAM")
+        axislegend(ax, position=:lb)
+    end
+    isempty(title) || Label(fig[0,1:length(geoms)], title, fontsize=18, tellwidth=false)
     return fig
 end
 
