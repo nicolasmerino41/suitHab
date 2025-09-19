@@ -1,10 +1,16 @@
 module Metrics
 
 using Statistics
+using ..BSH
+using ..Grids
+using ..Metawebs
+using ..HL
+import ..BSH: BAMParams
 
 export worst_geometry, rank_flip, did_curves, regime_summary
 export dist_metrics
 export ks_best_fstar, ks_distance
+export abs_bsh_vs_loss
 
 "Pick geometry with largest relative loss (most negative)."
 function worst_geometry(rel_by_geom::Dict{Symbol,Any}; at_index::Int)
@@ -90,7 +96,7 @@ end
 function ks_best_fstar(; rng, pool, grid, pars, loss_fracs, geometry::Symbol=:front, seed_A::Int=1)
     best_f, best_KS = first(loss_fracs), -Inf
     for f in loss_fracs
-        rAM, rBAM = BSH.per_species_relative_loss(rng, pool, grid, pars; fstar=f, geometry=geometry, seed_A=seed_A)
+        rAM, rBAM = per_species_relative_loss(rng, pool, grid, pars; fstar=f, geometry=geometry, seed_A=seed_A)
         # use positive-loss convention L = -Δ/BSH0 ∈ [0,1]
         LAM  = clamp.(-rAM, 0.0, 1.0)
         LBAM = clamp.(-rBAM, 0.0, 1.0)
@@ -100,6 +106,44 @@ function ks_best_fstar(; rng, pool, grid, pars, loss_fracs, geometry::Symbol=:fr
         end
     end
     (; f=best_f, KS=best_KS)
+end
+
+"""
+abs_bsh_vs_loss(; rng, pool, grid, pars, loss_fracs, seed_A=1, A_fn=nothing, geoms=(:random,:clustered,:front))
+
+Returns Dict{Symbol,NamedTuple} with fields:
+  :loss  -> Vector{Float64}
+  :AM    -> Vector{Float64}  (mean over consumers, normalized by ORIGINAL area)
+  :BAM   -> Vector{Float64}  (same)
+Uses the SAME A-construction path you use elsewhere (seed_A and optional A_fn).
+"""
+function abs_bsh_vs_loss(; rng, pool, grid, pars::BAMParams,
+    loss_fracs::AbstractVector{<:Real}, seed_A::Int=1, A_fn=nothing,
+    geoms::Tuple=(:random,:clustered,:front))
+
+    # build A once, exactly as your BSH routines do
+    A = isnothing(A_fn) ? abiotic_matrix(pool, grid; niche_width=0.12, seed=seed_A) :
+                          A_fn(pool, grid; seed=seed_A)
+
+    out = Dict{Symbol,NamedTuple}()
+
+    for g in geoms
+        am = Float64[]; bm = Float64[]
+        for f in loss_fracs
+            keepfrac = 1 - f
+            keep = g === :random    ? HL.random_mask(rng, grid.C, keepfrac) :
+                   g === :clustered ? HL.clustered_mask(rng, grid.nx, grid.ny, keepfrac; nseeds=8) :
+                                      HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
+
+            bAM = mean_BSH_over_consumers_area0(rng, pool, grid, pars;
+                    A=A, keepmask=keep, mode=:AM)
+            bBM = mean_BSH_over_consumers_area0(rng, pool, grid, pars;
+                    A=A, keepmask=keep, mode=:BAM)
+            push!(am, bAM); push!(bm, bBM)
+        end
+        out[g] = (loss=collect(loss_fracs), AM=am, BAM=bm)
+    end
+    return out
 end
 
 end # module
