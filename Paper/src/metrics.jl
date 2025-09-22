@@ -11,6 +11,8 @@ export worst_geometry, rank_flip, did_curves, regime_summary
 export dist_metrics
 export ks_best_fstar, ks_distance
 export abs_bsh_vs_loss
+export mixture_response_at_f, mixture_elasticity_at_f, mixture_geom_delta
+export bootstrap_mixture_maps
 
 "Pick geometry with largest relative loss (most negative)."
 function worst_geometry(rel_by_geom::Dict{Symbol,Any}; at_index::Int)
@@ -144,6 +146,131 @@ function abs_bsh_vs_loss(; rng, pool, grid, pars::BAMParams,
         out[g] = (loss=collect(loss_fracs), AM=am, BAM=bm)
     end
     return out
+end
+
+# --- src/metrics.jl additions ---
+export mixture_response_at_f, mixture_elasticity_at_f, mixture_geom_delta
+
+"Retained suitable area at f* for a given A/B/M mixture (weights sum to 1)."
+function mixture_response_at_f(; rng, pool, grid, pars::BSH.BAMParams,
+    wA::Float64, wB::Float64, wM::Float64, fstar::Float64, geometry::Symbol,
+    seed_A::Int=1, A_fn=abiotic_matrix, agg::Symbol=:mean, kreq::Int=1)
+
+    @assert isapprox(wA + wB + wM, 1.0; atol=1e-8)
+    keepfrac = 1 - fstar
+    keep = geometry === :random    ? HL.random_mask(rng, grid.C, keepfrac) :
+           geometry === :clustered ? HL.clustered_mask(rng, grid.nx, grid.ny, keepfrac; nseeds=8) :
+                                     HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
+
+    # Build A once; reuse for A-only, AM, BAM
+    A = A_fn(pool, grid; seed=seed_A)
+
+    # A-only (climate pass only; average over consumers vs ORIGINAL area)
+    A_mask = @view A[:, keep]
+    yA = BSH.mean_Aonly_over_consumers_area0(A_mask, pool, grid.C)
+
+    # AM (abiotic + movement)
+    yM = BSH.mean_BSH_over_consumers_area0(rng, pool, grid, pars; A=A, keepmask=keep, mode=:AM)
+
+    # BAM (abiotic + movement + biotic; pass agg/kreq to control stringency)
+    yB = BSH.mean_BSH_over_consumers_area0(rng, pool, grid, pars; A=A, keepmask=keep, mode=:BAM)
+
+    return wA*yA + wM*yM + wB*yB
+end
+
+"Finite-difference elasticity at f* for a given mixture and geometry."
+function mixture_elasticity_at_f(; rng, pool, grid, pars, wA, wB, wM, fstar, geometry,
+    δ::Float64=0.02, kwargs...)
+
+    f1 = clamp(fstar - δ/2, 0.0, 0.95)
+    f2 = clamp(fstar + δ/2, 0.0, 0.95)
+    y1 = mixture_response_at_f(; rng, pool, grid, pars, wA, wB, wM, fstar=f1, geometry, kwargs...)
+    y2 = mixture_response_at_f(; rng, pool, grid, pars, wA, wB, wM, fstar=f2, geometry, kwargs...)
+    return (y2 - y1) / (f2 - f1)
+end
+
+"Geometry contrast at f*: Δ = y_random − y_other for a mixture."
+function mixture_geom_delta(; rng, pool, grid, pars, wA, wB, wM, fstar, other::Symbol, kwargs...)
+    yR = mixture_response_at_f(; rng, pool, grid, pars, wA, wB, wM, fstar, geometry=:random, kwargs...)
+    yO = mixture_response_at_f(; rng, pool, grid, pars, wA, wB, wM, fstar, geometry=other,  kwargs...)
+    return yR - yO
+end
+
+"""
+bootstrap_mixture_maps(; rng, pool, grid, pars, weights, fstar, A_fn, agg, kreq,
+                       geometries=(:random,:clustered,:front),
+                       A_seeds=1:24, pool_seeds=nothing)
+
+Returns:
+  elastic_mean[g], elastic_lo[g], elastic_hi[g] :: Dict{Symbol, Vector{Float64}}
+  dRF_mean, dRF_lo, dRF_hi :: Vector{Float64}
+  dRC_mean, dRC_lo, dRC_hi :: Vector{Float64}
+(‘lo/hi’ are p10/p90 across seeds.)
+"""
+function bootstrap_mixture_maps(; rng, pool, grid, pars,
+        weights::Vector{NTuple{3,Float64}},
+        fstar::Float64, A_fn, agg::Symbol, kreq::Int,
+        geometries::Tuple=(:random,:clustered,:front),
+        A_seeds = 1:24, pool_seeds = nothing)
+
+    # Helper to get pool per replicate (fixed pool if pool_seeds = nothing)
+    function pool_for(rep)
+        if pool_seeds === nothing
+            return pool
+        else
+            seed = pool_seeds[ ((rep-1) % length(pool_seeds)) + 1 ]
+            return Metawebs.build_metaweb_archetype(MersenneTwister(seed);
+                                                    S=pool.S, basal_frac=mean(pool.basal), archetype=:mid)
+        end
+    end
+
+    # Containers
+    elast_vals = Dict(g => [Float64[] for _ in eachindex(weights)] for g in geometries)
+    dRF_vals   = [Float64[] for _ in eachindex(weights)]
+    dRC_vals   = [Float64[] for _ in eachindex(weights)]
+
+    nrep = length(A_seeds)
+
+    for (rep, seedA) in enumerate(A_seeds)
+        p = pool_for(rep)
+        for (k, (a,b,m)) in enumerate(weights)
+            # elasticities per geometry
+            for g in geometries
+                e = mixture_elasticity_at_f(; rng, pool=p, grid, pars,
+                        wA=a, wB=b, wM=m, fstar, geometry=g,
+                        A_fn=A_fn, agg=agg, kreq=kreq, seed_A=seedA)
+                push!(elast_vals[g][k], e)
+            end
+            # deltas
+            rf = mixture_geom_delta(; rng, pool=p, grid, pars, wA=a, wB=b, wM=m,
+                                    fstar, other=:front,     A_fn=A_fn, agg=agg, kreq=kreq, seed_A=seedA)
+            rc = mixture_geom_delta(; rng, pool=p, grid, pars, wA=a, wB=b, wM=m,
+                                    fstar, other=:clustered, A_fn=A_fn, agg=agg, kreq=kreq, seed_A=seedA)
+            push!(dRF_vals[k], rf);  push!(dRC_vals[k], rc)
+        end
+    end
+
+    # Summarize
+    function summarize(vs)
+        μ  = [mean(v) for v in vs]
+        lo = [quantile(v,0.10) for v in vs]
+        hi = [quantile(v,0.90) for v in vs]
+        μ, lo, hi
+    end
+
+    elastic_mean = Dict{Symbol,Vector{Float64}}()
+    elastic_lo   = Dict{Symbol,Vector{Float64}}()
+    elastic_hi   = Dict{Symbol,Vector{Float64}}()
+    for g in geometries
+        μ, lo, hi = summarize(elast_vals[g])
+        elastic_mean[g] = μ; elastic_lo[g] = lo; elastic_hi[g] = hi
+    end
+    dRF_mean, dRF_lo, dRF_hi = summarize(dRF_vals)
+    dRC_mean, dRC_lo, dRC_hi = summarize(dRC_vals)
+
+    return (; elastic_mean, elastic_lo, elastic_hi,
+            dRF_mean, dRF_lo, dRF_hi,
+            dRC_mean, dRC_lo, dRC_hi)
 end
 
 end # module
