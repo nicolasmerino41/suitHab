@@ -13,6 +13,9 @@ using ..HL
 
 export run_metaweb_sweep
 export run_realities_Aonly
+export run_realities_suitable_area
+export run_blend_realities_suitable_area, simplex_grid
+export blend_geometry_delta_at_fstar, blend_elasticity_at_fstar
 
 # ------------------------ utilities on SpeciesPool ----------------------------
 
@@ -223,6 +226,252 @@ function run_realities_Aonly(; rng, grid, realities=:default,
         out[g] = (loss=collect(loss_fracs), ABM=A_ABM, MAB=A_MAB, BAM=A_BAM)
     end
     return out
+end
+
+# -- helper: mean (over consumers) of occupied cells in keep-mask / ORIGINAL area
+_mean_area0_from_P(P::BitMatrix, pool, grid, keep::BitVector) = begin
+    cons = findall(!, pool.basal)
+    isempty(cons) && return 0.0
+    vals = Float64[]
+    @inbounds for s in cons
+        push!(vals, sum(@view P[s, keep]) / grid.C)
+    end
+    return mean(vals)
+end
+
+# -- build a "reality" = baseline occupancy map P with dominance tilted to A, M, or B
+function _build_reality_P(; rng::AbstractRNG, grid,
+    S::Int, basal_frac::Float64, seed_pool::Int, seed_A::Int,
+    which::Symbol,  # :ABM | :MAB | :BAM
+    pars_ABM::BSH.BAMParams, pars_MAB::BSH.BAMParams, pars_BAM::BSH.BAMParams,
+    agg::Symbol=:mean, kreq::Int=1
+)
+    # pool choice can be neutral or you can vary redundancy; I keep it neutral (= :mid)
+    pool = Metawebs.build_metaweb_archetype(rng; S=S, basal_frac=basal_frac, archetype=:mid)
+    A    = BSH.abiotic_matrix(pool, grid; seed=seed_A)
+    keep_all = trues(grid.C)
+
+    if which === :ABM
+        # abiotic-dominated: movement OFF or weak, stricter τA, no prey gate
+        P, _ = BSH.assemble_AM(pool, grid, A, keep_all; pars=pars_ABM)
+        return (pool=pool, P=P)
+    elseif which === :MAB
+        # movement-dominated: strong component gate (large T), otherwise AM
+        P, _ = BSH.assemble_AM(pool, grid, A, keep_all; pars=pars_MAB)
+        return (pool=pool, P=P)
+    elseif which === :BAM
+        # biotic-dominated: strong prey sufficiency; movement optional
+        out = BSH.assemble_BAM(pool, grid, A, keep_all; pars=pars_BAM, agg=agg, kreq=kreq)
+        return (pool=pool, P=out.P)
+    else
+        error("which must be :ABM, :MAB, or :BAM")
+    end
+end
+
+"""
+run_realities_suitable_area(; rng, grid, loss_fracs, S, basal_frac,
+    Npools=12, seed_pool0=1, seed_A=1,
+    geoms=(:random,:clustered,:front),
+    pars_ABM=BSH.BAMParams(τA=0.55, movement=:off),
+    pars_MAB=BSH.BAMParams(τA=0.50, movement=:component, T=12),
+    pars_BAM=BSH.BAMParams(τA=0.50, τB=0.50, movement=:off),
+    agg=:kofn, kreq=2)
+
+For each geometry and loss fraction, builds Npools independent *baseline* occupancy
+maps that represent ABM / MAB / BAM “worlds”, then **clips** them with the mask
+(no re-assembly), and returns the mean (over consumers) suitable area / original area.
+
+Returns Dict{Symbol,NamedTuple} mapping geometry to:
+  (loss, ABM::Vector, MAB::Vector, BAM::Vector)
+"""
+function run_realities_suitable_area(; rng::AbstractRNG, grid,
+    loss_fracs=0.2:0.1:0.8, S::Int=200, basal_frac::Float64=0.25,
+    Npools::Int=12, seed_pool0::Int=1, seed_A::Int=1,
+    geoms::Tuple=(:random,:clustered,:front),
+    pars_ABM=BAMParams(; τA=0.55, movement=:off),
+    pars_MAB=BAMParams(; τA=0.50, movement=:component, T=12),
+    pars_BAM=BAMParams(; τA=0.50, τB=0.50, movement=:off),
+    agg::Symbol=:kofn, kreq::Int=2
+)
+    out = Dict{Symbol,NamedTuple}()
+
+    for g in geoms
+        yABM = Float64[]; yMAB = Float64[]; yBAM = Float64[]
+        for f in loss_fracs
+            keepfrac = 1 - f
+            keep = g === :random    ? HL.random_mask(rng, grid.C, keepfrac) :
+                   g === :clustered ? HL.clustered_mask(rng, grid.nx, grid.ny, keepfrac; nseeds=8) :
+                                      HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
+
+            valsA = Float64[]; valsM = Float64[]; valsB = Float64[]
+
+            for k in 0:Npools-1
+                rseed = seed_pool0 + k
+                # ABM world
+                AB = _build_reality_P(; rng=MersenneTwister(hash((:ABM, rseed))),
+                    grid, S, basal_frac, seed_pool=rseed, seed_A=seed_A+k,
+                    which=:ABM, pars_ABM, pars_MAB, pars_BAM, agg, kreq)
+                push!(valsA, _mean_area0_from_P(AB.P, AB.pool, grid, keep))
+
+                # MAB world
+                MB = _build_reality_P(; rng=MersenneTwister(hash((:MAB, rseed))),
+                    grid, S, basal_frac, seed_pool=rseed, seed_A=seed_A+k,
+                    which=:MAB, pars_ABM, pars_MAB, pars_BAM, agg, kreq)
+                push!(valsM, _mean_area0_from_P(MB.P, MB.pool, grid, keep))
+
+                # BAM world
+                BB = _build_reality_P(; rng=MersenneTwister(hash((:BAM, rseed))),
+                    grid, S, basal_frac, seed_pool=rseed, seed_A=seed_A+k,
+                    which=:BAM, pars_ABM, pars_MAB, pars_BAM, agg, kreq)
+                push!(valsB, _mean_area0_from_P(BB.P, BB.pool, grid, keep))
+            end
+
+            push!(yABM, mean(valsA)); push!(yMAB, mean(valsM)); push!(yBAM, mean(valsB))
+        end
+        out[g] = (loss=collect(loss_fracs), ABM=yABM, MAB=yMAB, BAM=yBAM)
+    end
+    return out
+end
+
+"Quick grid on the A/M/B simplex (step in {0,0.1,0.2,...,1}, sum≈1)."
+function simplex_grid(step::Float64=0.1)
+    W = Tuple{Float64,Float64,Float64}[]
+    vals = collect(0.0:step:1.0)
+    for a in vals, m in vals
+        b = 1.0 - a - m
+        if b ≥ -1e-9 && b ≤ 1.0 + 1e-9
+            push!(W, (round(a;digits=3), round(m;digits=3), round(max(0.0,min(1.0,b));digits=3)))
+        end
+    end
+    unique(W)
+end
+
+"Build the three baseline maps once."
+function _baseline_maps(; rng, grid, S::Int, basal_frac::Float64, seed_pool::Int, seed_A::Int,
+    pars_ABM::BAMParams, pars_MAB::BAMParams, pars_BAM::BAMParams,
+    agg::Symbol=:kofn, kreq::Int=2)
+
+    pool = Metawebs.build_metaweb_archetype(rng; S=S, basal_frac=basal_frac, archetype=:mid)
+    A    = BSH.abiotic_matrix(pool, grid; seed=seed_A)
+    keep_all = trues(grid.C)
+
+    P_A, _ = BSH.assemble_AM(pool, grid, A, keep_all; pars=pars_ABM)
+    P_M, _ = BSH.assemble_AM(pool, grid, A, keep_all; pars=pars_MAB)
+    outB   = BSH.assemble_BAM(pool, grid, A, keep_all; pars=pars_BAM, agg=agg, kreq=kreq)
+    P_B    = outB.P
+    (; pool, P_A, P_M, P_B)
+end
+
+"Blend species rows from P_A, P_M, P_B according to weights (wA,wM,wB)."
+function _blend_P(pool, P_A::BitMatrix, P_M::BitMatrix, P_B::BitMatrix,
+                  wA::Float64, wM::Float64, rng::AbstractRNG)
+    S, C = size(P_A)
+    P = falses(S, C)
+    cons = findall(!, pool.basal)
+    n = length(cons)
+    nA = round(Int, wA * n); nM = round(Int, wM * n)
+    nB = max(0, n - nA - nM)
+    idx = copy(cons); shuffle!(rng, idx)
+    SA, SM, SB = idx[1:nA], idx[nA+1:nA+nM], idx[nA+nM+1:end]
+    P[SA, :] .= P_A[SA, :]
+    P[SM, :] .= P_M[SM, :]
+    P[SB, :] .= P_B[SB, :]
+    # keep basal identical across blends (use P_A rows, which equal P_M in AM)
+    bas = findall(pool.basal)
+    P[bas, :] .= P_A[bas, :]
+    return P
+end
+
+"""
+run_blend_realities_suitable_area(; rng, grid, loss_fracs, S, basal_frac,
+    weights::Vector{Tuple{Float64,Float64,Float64}},  # list of (wA,wM,wB)
+    geoms=(:random,:clustered,:front), Nrep=8, seed0=1,
+    pars_ABM=BSH.BAMParams(τA=0.55, movement=:off),
+    pars_MAB=BSH.BAMParams(τA=0.50, movement=:component, T=14),
+    pars_BAM=BSH.BAMParams(τA=0.50, τB=0.50, movement=:off),
+    agg=:kofn, kreq=2)
+
+Returns Dict{Symbol,Dict{Tuple=>NamedTuple}} so that
+out[:random][(wA,wM,wB)] = (loss, y)
+where y is the curve of suitable area (mean over consumers / original area).
+"""
+function run_blend_realities_suitable_area(; rng::AbstractRNG, grid,
+    loss_fracs=0.2:0.1:0.8, S::Int=200, basal_frac::Float64=0.25,
+    weights::Vector{Tuple{Float64,Float64,Float64}} = simplex_grid(0.25),
+    geoms::Tuple=(:random,:clustered,:front), Nrep::Int=8, seed0::Int=1,
+    pars_ABM::BSH.BAMParams=BSH.BAMParams(; τA=0.55, movement=:off),
+    pars_MAB::BSH.BAMParams=BSH.BAMParams(; τA=0.50, movement=:component, T=14),
+    pars_BAM::BSH.BAMParams=BSH.BAMParams(; τA=0.50, τB=0.50, movement=:off),
+    agg::Symbol=:kofn, kreq::Int=2
+)
+    out = Dict{Symbol,Dict{Tuple{Float64,Float64,Float64},NamedTuple}}(
+        g => Dict{Tuple{Float64,Float64,Float64},NamedTuple}() for g in geoms)
+
+    for g in geoms
+        for w in weights
+            wA, wM, wB = w
+            y = Float64[]
+            for f in loss_fracs
+                keepfrac = 1 - f
+                keep = g === :random    ? HL.random_mask(rng, grid.C, keepfrac) :
+                       g === :clustered ? HL.clustered_mask(rng, grid.nx, grid.ny, keepfrac; nseeds=8) :
+                                          HL.front_mask(rng, grid.xy, keepfrac; axis=:x, noise=0.05)
+                repvals = Float64[]
+                for r in 0:Nrep-1
+                    base = _baseline_maps(
+                        ; rng=MersenneTwister(hash((:base, g, w, r, seed0))),
+                          grid, S, basal_frac, seed_pool=seed0+r, seed_A=seed0+r,
+                          pars_ABM, pars_MAB, pars_BAM, agg, kreq)
+                    Pmix = _blend_P(base.pool, base.P_A, base.P_M, base.P_B, wA, wM,
+                                    MersenneTwister(hash((:assign, g, w, r, seed0))))
+                    push!(repvals, _mean_area0_from_P(Pmix, base.pool, grid, keep))
+                end
+                push!(y, mean(repvals))
+            end
+            out[g][w] = (loss=collect(loss_fracs), y=y)
+        end
+    end
+    return out
+end
+
+"""
+blend_geometry_delta_at_fstar(blend, fstar; geomA=:random, geomB=:front)
+Given the `blend` dict from run_blend_realities_suitable_area, return
+a Vector of (wA,wM,wB, delta) at f* where delta = y_geomA - y_geomB.
+"""
+function blend_geometry_delta_at_fstar(blend::Dict{Symbol,<:Any}, fstar::Float64;
+    geomA::Symbol=:random, geomB::Symbol=:front)
+
+    loss = first(values(blend[geomA])).loss
+    k = argmin(abs.(loss .- fstar))
+    out = Tuple{Float64,Float64,Float64,Float64}[]
+    for w in keys(blend[geomA])
+        ya = blend[geomA][w].y[k]
+        yb = blend[geomB][w].y[k]
+        push!(out, (w[1], w[2], 1.0 - w[1] - w[2], ya - yb))
+    end
+    out
+end
+
+"""
+Numerical derivative dy/df at f* for each weight triple and geometry.
+Returns Dict{Symbol,Vector{(wA,wM,wB,slope)}}.
+"""
+function blend_elasticity_at_fstar(blend::Dict{Symbol,<:Any}, fstar::Float64)
+    res = Dict{Symbol, Vector{Tuple{Float64,Float64,Float64,Float64}}}()
+    loss = first(values(first(values(blend)))).loss
+    k = argmin(abs.(loss .- fstar))
+    k = clamp(k, 2, length(loss)-1)
+    for g in keys(blend)
+        acc = Tuple{Float64,Float64,Float64,Float64}[]
+        for w in keys(blend[g])
+            y = blend[g][w].y
+            slope = (y[k+1]-y[k-1]) / (loss[k+1]-loss[k-1])
+            push!(acc, (w[1], w[2], 1.0 - w[1] - w[2], slope))
+        end
+        res[g] = acc
+    end
+    res
 end
 
 end # module
