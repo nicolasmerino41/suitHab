@@ -47,7 +47,7 @@ end
 
 ########################### REMOVE ME LATER ############################
 # movement ON to make geometry relevant
-pars = BSH.BAMParams(; τA=0.6, τB=0.05, τocc=0.2, γ=3.0, movement=:component, T=10)
+pars = BSH.BAMParams(; τA=0.6, τB=0.05, τocc=0.2, γ=3.0, movement=:off, T=10)
 
 # basal squeezed to low climate + consumers aligned to prey
 A_fn_punch = (pool, grid; seed=1) -> BSH.abiotic_matrix_aligned(

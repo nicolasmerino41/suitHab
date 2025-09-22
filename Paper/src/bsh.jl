@@ -299,7 +299,7 @@ Abiotic suitability with optional (i) basal climate bias and (ii) prey–consume
 function abiotic_matrix_aligned(
     pool::Metawebs.SpeciesPool, grid::Grids.Grid;
     niche_basal::Float64=0.10, niche_cons::Float64=0.12,
-    bias_basal::Float64=0.0, align::Float64=0.0,
+    bias_basal::Float64=0.7, align::Float64=0.8,
     seed::Int=1
 )
     rng = MersenneTwister(seed)
