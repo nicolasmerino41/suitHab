@@ -1,6 +1,6 @@
-curves = Metrics.abs_bsh_vs_loss(; rng, pool=pool_low, grid=grid_mosa, pars=pars,
+curves = Metrics.abs_bsh_vs_loss(; rng, pool=pool_low, grid=grid_patch, pars=pars,
                                  A_fn=A_fn_punch, loss_fracs=0.2:0.1:0.8, seed_A=1)
-figABS = Figs.fig_abs_bsh_vs_loss(curves; title="Absolute BSH vs loss — gradient")
+figABS = Figs.fig_abs_bsh_vs_loss(curves; title="Absolute BSH vs loss — patchy")
 save("Paper/figs/ABS_BSH_vs_loss.png", figABS)
 
 begin 
