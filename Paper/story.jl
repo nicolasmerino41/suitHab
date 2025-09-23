@@ -133,7 +133,7 @@ SFC = build_surfaces(; fstar=fstar, geom_list=geom_list, nside=25)
 function plot_surface(geom::Symbol; title="")
     xs, ys, _, ZZ = SFC.surf[geom]
     # Make a dense scatter heat (Makie handles it well)
-    fig = Figure(resolution=(820,820))
+    fig = Figure(; size=(820,820))
     ax  = Axis(fig[1,1], title=title, xlabel="A … M", ylabel="")
     sc  = scatter!(ax, xs, ys; markersize=6, color=vec(ZZ), colormap=:viridis)
     # draw triangle frame
@@ -151,7 +151,7 @@ function plot_contrast(g1::Symbol, g0::Symbol; title="")
     xs, ys, _, Z1 = SFC.surf[g1]
     _,  _, _, Z0  = SFC.surf[g0]
     Δ = vec(Z1) .- vec(Z0)
-    fig = Figure(resolution=(820,820))
+    fig = Figure(; size=(820,820))
     ax  = Axis(fig[1,1], title=title, xlabel="A … M", ylabel="")
     sc  = scatter!(ax, xs, ys; markersize=6, color=Δ, colormap=:balance)
     lines!(ax, [0, 0.5, 1, 0], [0, √3/2, 0, 0], color=:black)
@@ -175,7 +175,7 @@ function elasticity_surface(geom::Symbol; df=0.02)
         end
         Z[t] = (mean(vals2) - mean(vals1)) / (f2 - f1)   # ∂y/∂f (negative)
     end
-    fig = Figure(resolution=(820,820))
+    fig = Figure(; size=(820,820))
     ax  = Axis(fig[1,1], title="Elasticity ∂y/∂f at f*=$(fstar) — $(String(geom))", xlabel="A … M", ylabel="")
     sc  = scatter!(ax, xs, ys; markersize=6, color=Z, colormap=:plasma)
     lines!(ax, [0, 0.5, 1, 0], [0, √3/2, 0, 0], color=:black)
@@ -193,7 +193,7 @@ function edge_slices(; N=11)
     edges = [(:AM, [(x, 0.0, 1-x) for x in range(0,1;length=N)]),
              (:AB, [(x, 1-x, 0.0) for x in range(0,1;length=N)]),
              (:BM, [(0.0, x, 1-x) for x in range(0,1;length=N)])]
-    fig = Figure(resolution=(1200,350))
+    fig = Figure(; size=(1200,350))
     for (col,(name, pts)) in enumerate(edges)
         ax = Axis(fig[1,col], title=String(name), xlabel="mixture coordinate", ylabel="retained area")
         for (gcol, geom) in zip([:black, :orange, :steelblue], geom_list)
@@ -222,7 +222,7 @@ function tail_risk_panel()
         "Mixed"   => (0.33, 0.34, 0.33),
         "B-heavy" => (0.1, 0.8, 0.1)
     )
-    fig = Figure(resolution=(1200,350))
+    fig = Figure(; size=(1200,350))
     for (i,(label,(wA,wB,wM))) in enumerate(pairs(mixes))
         ax = Axis(fig[1,i], title=label, xlabel="area lost f", ylabel="P10 per-species retained area")
         for (gcol, geom) in zip([:black, :orange, :steelblue], geom_list)
