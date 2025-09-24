@@ -268,7 +268,7 @@ function plot_panels_for_grid(gname::String; saveprefix::String)
             end
         end
         display(fig)
-        Mke.save("$(saveprefix)_ΔRF_panels.png", fig)
+        Mke.save("Paper/AxBxM_geometry_figs/$(saveprefix)_ΔRF_panels.png", fig)
     end
 
     begin
@@ -285,7 +285,7 @@ function plot_panels_for_grid(gname::String; saveprefix::String)
             end
         end
         display(fig)
-        Mke.save("$(saveprefix)_ΔRC_panels.png", fig)
+        Mke.save("Paper/AxBxM_geometry_figs/$(saveprefix)_ΔRC_panels.png", fig)
     end
 end
 
