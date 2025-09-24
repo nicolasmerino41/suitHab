@@ -1,0 +1,109 @@
+---
+title: "AM Vs BAM BSH"
+author: "Nico & Núria"
+date: "2025-09-24"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Why AM-BSH and BAM-BSH diverge (before any habitat loss)
+
+**Goal.** Explain the difference between abiotic-only suitability (AM-BSH) and suitability that also requires prey (BAM-BSH). We quantify how that difference changes with (i) metaweb structure and (ii) climatic niche construction, without invoking habitat loss geometry.
+
+---
+
+## What we compare
+
+- **AM-BSH**: a cell is suitable for a consumer if it passes the abiotic gate \(A\) (for example, suitability >= \(\tau_A\)).
+- **BAM-BSH**: a cell is suitable only if it passes \(A\) and the consumer finds enough prey there (the \(B\) condition), defined as having at least \(k\) required prey present (or meeting an aggregator threshold).
+
+We summarize the separation with map-level metrics (averages across consumers unless noted):
+
+- **DeltaArea** = mean area(AM) minus mean area(BAM). Larger values mean stronger biotic restriction.
+
+- **DeltaGini** = Gini(AM per-species areas) minus Gini(BAM per-species areas).
+
+- **TailLoss** = change in the high quantile (for example, 90th percentile) of per-species losses.
+
+- **DeltaSplus** = change in the number of species with any suitable area.
+
+- **JSD** = Jensen–Shannon divergence between per-species area distributions (AM vs BAM).
+
+We report DeltaArea and DeltaGini in the main text; the others are diagnostics.
+
+---
+
+## Why the gap happens (two measurable mediators)
+
+1. **Prey sufficiency among A-eligible cells**  
+   \[
+   P_{suff} = Pr(\text{at least k prey present} \mid A\text{-kept cell})
+   \]  
+   Lower \(P_{suff}\) leads to larger AM to BAM drops.
+
+2. **Prey co-retention structure** (within A-eligible cells)  
+   - **K-spectrum**: the ECDF of \(K\), the number of a consumer's prey present in an eligible cell.  
+   - **Redundancy proxy** \(R_{0.95}\): the 95th percentile of diet breadth across consumers.  
+   Lower redundancy and weaker co-retention lead to larger gaps.
+
+Our parameters act by moving these two mediators.
+
+---
+
+## The knobs that tune the gap
+
+### A) Metaweb structure
+- **Connectance or density (C)**: lower C means less redundancy and larger DeltaArea.  
+- **Diet breadth (mean and variance, summarized by \(R_{0.95}\))**: narrower diets mean larger DeltaArea.  
+- **Motif mix**: more strict chains and strong modularity give larger DeltaArea; more omnivory or shared prey give smaller DeltaArea.
+
+### B) Climatic niche construction
+- **Consumer–prey climatic alignment (align)**: higher align means prey and consumers co-occur, giving smaller DeltaArea.  
+- **Niche breadth (sigma)**: narrower climatic niches give larger DeltaArea.  
+- *(Optional)* **Abiotic stringency (tau_A)**: very strict A can compress the gap, while moderate A lets the B-gate dominate.
+
+---
+
+## A compact experiment
+
+We sweep two 2-D slices and replicate each setting:
+1. (C, align) at fixed diet redundancy and niche breadth.  
+2. (\(R_{0.95}\), sigma) at fixed connectance and alignment.
+
+For each cell of these grids we:
+
+- Build a metaweb with the targeted structure (S species).
+
+- Build abiotic niches with given alignment and breadth.
+
+- Compute AM and BAM maps (no movement, no habitat loss).
+
+- Compute DeltaArea, DeltaGini, \(P_{suff}\), and K-spectrum summaries.
+
+- Aggregate across replicates to report means and quantile bands.
+
+---
+
+## Expected qualitative patterns
+
+- DeltaArea decreases monotonically with connectance, diet redundancy, alignment, and niche breadth.
+- Low connectance and low alignment combine super-additively to yield the strongest AM to BAM penalties.
+- DeltaArea is well mediated by \(P_{suff}\) and by the K-spectrum; include a simple mediation scatter (DeltaArea vs \(P_{suff}\)).
+
+This framework separates the biotically-aware correction (BAM) from abiotic-only maps (AM), and explains when and why that correction is large—before any habitat loss geometry is considered.
