@@ -10,12 +10,13 @@ include("src/niches.jl");   using .Niches
 include("src/bam.jl");      using .BAM
 include("src/metrics.jl");  using .Metrics
 include("src/plotting.jl"); using .Plotting
+include("src/climate.jl");     using .Climate
 const Mke = CairoMakie
 # ---------------------------
 # CONFIG
 # ---------------------------
-mkpath(joinpath(@__DIR__, "..", "data"))
-mkpath(joinpath(@__DIR__, "..", "data", "figs"))
+mkpath(joinpath(@__DIR__, "data"))
+mkpath(joinpath(@__DIR__, "data", "figs"))
 
 rng           = MersenneTwister(1)
 S             = 175
@@ -36,9 +37,8 @@ Aligns = range(0.0, 1.0; length=30)
 R95s   = Int.(range(1.0, 10.0; length=10))
 Sigmas = range(0.06, 0.24; length=24)
 
-
 # climate grid (choose gradient here)
-Cgrid = Niches.make_climate_grid(nx, ny; kind=:nongradient, seed=11)
+Cgrid = Climate.make_climate_grid(nx, ny; kind=:ridge, seed=11)
 
 # ---------------------------
 # helpers
@@ -54,12 +54,17 @@ function run_once(rng; Cgrid, align, σ, R95, motif_mix=:mixed,
     am = BAM.species_areas(out[:AM_maps])
     bm = BAM.species_areas(out[:BAM_maps])
 
+    # who's a consumer?
+    is_cons = mw.trophic_role .!= :basal
+    # average abiotic admission among consumers: π_A
+    piA_cons = mean(am[is_cons])
+
     ΔA    = Metrics.delta_area(am, bm)
     ΔG    = Metrics.delta_gini(am, bm)
     Psuff = BAM.prey_sufficiency(mw, out[:Akeep]; kreq=kreq)
     Ks    = BAM.K_spectrum(mw, out[:Akeep])
 
-    return (ΔA=ΔA, ΔG=ΔG, Psuff=Psuff, Kmean=mean(Ks), Kp90=quantile(Ks, 0.9))
+    return (ΔA=ΔA, ΔG=ΔG, Psuff=Psuff, Kmean=mean(Ks), Kp90=quantile(Ks,0.9), πA=piA_cons)
 end
 
 function replicate_sweep(rng, sweep; fixed::NamedTuple)
@@ -80,7 +85,10 @@ function replicate_sweep(rng, sweep; fixed::NamedTuple)
         Ps    = [v.Psuff for v in vals]; Plo, Pmean, Phi  = Metrics.qband(Ps)
         K90s  = [v.Kp90 for v in vals]; Klo, Kmean, Khi   = Metrics.qband(K90s)
 
-        row = merge(pars, (; ΔAlo, ΔAmean, ΔAhi, ΔGlo, ΔGmean, ΔGhi, Plo, Pmean, Phi, Klo, Kmean, Khi))
+        πAs = [v.πA for v in vals]; πAlo, πAmean, πAhi = Metrics.qband(πAs)
+        row = merge(pars, (; ΔAlo, ΔAmean, ΔAhi, ΔGlo, ΔGmean, ΔGhi,
+                            Plo, Pmean, Phi, Klo, Kmean, Khi, πAlo, πAmean, πAhi))
+
         push!(results, row, promote=true)
     end
     return results
@@ -92,8 +100,11 @@ end
 sweep1 = NamedTuple[(; C=c, align=a) for c in Cs for a in Aligns]
 fixed1 = (; Cgrid=Cgrid, align=default_align, σ=default_σ, R95=default_R95,
            C=default_C, S=S, basal_frac=basal_frac, τA=τA, kreq=kreq)
-res1 = replicate_sweep(rng, sweep1; fixed=fixed1)
-CSV.write(joinpath(@__DIR__, "..", "data", "sweep_C_align.csv"), res1)
+if true # Only run if needed
+    res1 = replicate_sweep(rng, sweep1; fixed=fixed1)
+    CSV.write(joinpath(@__DIR__, "data", "sweep_C_align_ridge.csv"), res1)
+end
+res1 = CSV.read(joinpath(@__DIR__, "data", "sweep_C_align.csv"), DataFrame)
 
 # Heatmap of ΔArea(C, align)
 begin
@@ -105,7 +116,7 @@ begin
     heatmap!(ax, xs, ys, Z')
     cb = Colorbar(fig[1,2], label="ΔArea")
     display(fig)
-    save(joinpath(@__DIR__, "..", "data", "figs", "HM_DeltaArea_C_align.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_C_align_ridge.png"), fig)
 end
 
 # ΔArea vs Psuff scatter (mediation)
@@ -114,7 +125,7 @@ begin
     ax  = Axis(fig[1,1], xlabel="P_suff", ylabel="ΔArea", title="Mediation: ΔArea vs P_suff (C, align sweep)")
     scatter!(ax, res1.Pmean, res1.ΔAmean)
     display(fig)
-    save(joinpath(@__DIR__, "..", "data", "figs", "Scatter_DeltaArea_vs_Psuff.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs", "Scatter_DeltaArea_vs_Psuff_ridge.png"), fig)
 end
 
 # ---------------------------
@@ -123,8 +134,11 @@ end
 sweep2 = NamedTuple[(; R95=r, σ=s) for r in R95s for s in Sigmas]
 fixed2 = (; Cgrid=Cgrid, align=default_align, σ=default_σ, R95=default_R95,
            C=default_C, S=S, basal_frac=basal_frac, τA=τA, kreq=kreq)
-res2 = replicate_sweep(rng, sweep2; fixed=fixed2)
-CSV.write(joinpath(@__DIR__, "..", "data", "sweep_R_sigma.csv"), res2)
+if true # Only run if you changed something
+    res2 = replicate_sweep(rng, sweep2; fixed=fixed2)
+    CSV.write(joinpath(@__DIR__, "data", "sweep_R_sigma_ridge.csv"), res2)
+end
+res2 = CSV.read(joinpath(@__DIR__, "data", "sweep_R_sigma.csv"), DataFrame)
 
 # Heatmap of ΔArea(R95, σ)
 begin
@@ -135,38 +149,81 @@ begin
     heatmap!(ax, xs, ys, Z')
     cb = Colorbar(fig[1,2], label="ΔArea")
     display(fig)
-    save(joinpath(@__DIR__, "..", "data", "figs", "HM_DeltaArea_R_sigma.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_R_sigma_ridge.png"), fig)
 end
 
-# ΔGini bars at four illustrative corners
-corners = [(; R95=min(R95s...), σ=min(Sigmas...)),
-           (; R95=min(R95s...), σ=max(Sigmas...)),
-           (; R95=max(R95s...), σ=min(Sigmas...)),
-           (; R95=max(R95s...), σ=max(Sigmas...))]
+# ---- ΔGini bars at four illustrative corners (robust) ----
+# Helper: return the dataframe row in `df` nearest to (Rtarget, σtarget)
+nearest_row(df, Rtarget, σtarget) = begin
+    d2 = (df.R95 .- Rtarget).^2 .+ (df.σ .- σtarget).^2
+    df[argmin(d2), :]
+end
+
+# Define the *targets* using min/max of your parameter ranges
+corner_targets = [
+    (; R95 = minimum(R95s), σ = minimum(Sigmas)),  # low R, narrow σ
+    (; R95 = minimum(R95s), σ = maximum(Sigmas)),  # low R, broad σ
+    (; R95 = maximum(R95s), σ = minimum(Sigmas)),  # high R, narrow σ
+    (; R95 = maximum(R95s), σ = maximum(Sigmas)),  # high R, broad σ
+]
 
 labels = ["low R, narrow σ", "low R, broad σ", "high R, narrow σ", "high R, broad σ"]
-vals   = Float64[]; los = Float64[]; his = Float64[]
 
-for c in corners
-    row = res2[(isapprox.(res2.R95, c.R95; atol=1e-8)) .& 
-               (isapprox.(res2.σ,  c.σ;  atol=1e-8)), :]
-    if nrow(row) == 0
-        @warn "No match found for corner R95=$(c.R95), σ=$(c.σ)"
-        continue
-    end
-    push!(vals, first(row.ΔGmean))
-    push!(los,  first(row.ΔGlo))
-    push!(his,  first(row.ΔGhi))
+vals = Float64[]; los = Float64[]; his = Float64[]
+for c in corner_targets
+    row = nearest_row(res2, c.R95, c.σ)
+    push!(vals, row.ΔGmean)
+    push!(los,  row.ΔGlo)
+    push!(his,  row.ΔGhi)
 end
 
 begin
-    fig = Figure(; size=(900,500))
-    ax  = Axis(fig[1,1], ylabel="ΔGini (AM − BAM)", xticks=(1:4, labels), title="Inequality shift across corners")
+    fig = Figure(; size=(900, 500))
+    ax  = Axis(
+        fig[1,1],
+        ylabel = "ΔGini (BAM − AM)", xticks = (1:4, labels),
+        title  = "ΔGini at illustrative corners"
+    )
     barplot!(ax, 1:4, vals)
-    Plotting.verrorbars!(ax, 1:4, vals, los, his; whisker=0.2)
+    Plotting.verrorbars!(ax, 1:4, vals, los, his; whisker=0.25)
     hlines!(ax, 0.0; color=:gray, linestyle=:dash)
+    ax.xticklabelrotation = π/10  # optional: avoid label overlap
     display(fig)
-    save(joinpath(@__DIR__, "..", "data", "figs", "Bars_DeltaGini_corners.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs", "Bars_DeltaGini_corners_ridge.png"), fig)
 end
 
 println("Done. CSVs and figures written to data/ and data/figs/")
+
+# --- π_A and P_suff vs alignment at a fixed connectance ---
+C_fixed = 0.06  # pick something in your “ridge” zone
+
+# helper: nearest row at (C, align)
+function nearest_row_at(df, Ctarget, atarget)
+    d2 = (df.C .- Ctarget).^2 .+ (df.align .- atarget).^2
+    df[argmin(d2), :]
+end
+
+xs   = sort(unique(res1.align))
+πA_y = Float64[]; Ps_y = Float64[]
+for a in xs
+    row = nearest_row_at(res1, C_fixed, a)
+    push!(πA_y, row.πAmean)
+    push!(Ps_y, row.Pmean)
+end
+Δ̂_y = πA_y .* (1 .- Ps_y)
+
+begin
+    fig = Figure(; size=(1100,420))
+    ax1 = Axis(fig[1,1], xlabel="alignment", ylabel="π_A (consumers)", title="Abiotic admission vs alignment")
+    lines!(ax1, xs, πA_y)
+
+    ax2 = Axis(fig[1,2], xlabel="alignment", ylabel="P_suff", title="Prey sufficiency vs alignment")
+    lines!(ax2, xs, Ps_y)
+
+    ax3 = Axis(fig[1,3], xlabel="alignment", ylabel="ΔArea ≈ π_A × (1−P_suff)", title="Approx ΔArea from mediation")
+    lines!(ax3, xs, Δ̂_y)
+
+    display(fig)
+    save(joinpath(@__DIR__, "data", "figs", "Mediation_curves_ridge.png"), fig)
+end
+
