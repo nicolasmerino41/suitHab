@@ -35,17 +35,17 @@ knitr::opts_chunk$set(echo = TRUE)
 
 We summarize the separation with map-level metrics (averages across consumers unless noted):
 
-- **DeltaArea** = mean area(AM) minus mean area(BAM). Larger values mean stronger biotic restriction.
+- **\( \Delta_{Area} \)** = mean area(AM) minus mean area(BAM). Larger values mean stronger biotic restriction.
 
-- **DeltaGini** = Gini(AM per-species areas) minus Gini(BAM per-species areas).
+- **\( \Delta_{Gini} \)** = Gini(AM per-species areas) minus Gini(BAM per-species areas).
 
 - **TailLoss** = change in the high quantile (for example, 90th percentile) of per-species losses.
 
-- **DeltaSplus** = change in the number of species with any suitable area.
+- **\( \Delta_{Splus} \)** = change in the number of species with any suitable area.
 
 - **JSD** = Jensen–Shannon divergence between per-species area distributions (AM vs BAM).
 
-We report DeltaArea and DeltaGini in the main text; the others are diagnostics.
+We report \( \Delta_{Area} \) and \( \Delta_{Gini} \) in the main text; the others are diagnostics.
 
 ---
 
@@ -69,13 +69,13 @@ Our parameters act by moving these two mediators.
 ## The knobs that tune the gap
 
 ### A) Metaweb structure
-- **Connectance or density (C)**: lower C means less redundancy and larger DeltaArea.  
-- **Diet breadth (mean and variance, summarized by \(R_{0.95}\))**: narrower diets mean larger DeltaArea.  
-- **Motif mix**: more strict chains and strong modularity give larger DeltaArea; more omnivory or shared prey give smaller DeltaArea.
+- **Connectance or density (C)**: lower C means less redundancy and larger \( \Delta \)Area.  
+- **Diet breadth (mean and variance, summarized by \(R_{0.95}\))**: narrower diets mean larger \( \Delta \)Area.  
+- **Motif mix**: more strict chains and strong modularity give larger \( \Delta \)Area; more omnivory or shared prey give smaller \( \Delta_{Area} \)
 
 ### B) Climatic niche construction
-- **Consumer–prey climatic alignment (align)**: higher align means prey and consumers co-occur, giving smaller DeltaArea.  
-- **Niche breadth (sigma)**: narrower climatic niches give larger DeltaArea.  
+- **Consumer–prey climatic alignment (align)**: higher align means prey and consumers co-occur, giving smaller \( \Delta_{Area} \).  
+- **Niche breadth (sigma)**: narrower climatic niches give larger \( \Delta_{Area} \).  
 - *(Optional)* **Abiotic stringency (tau_A)**: very strict A can compress the gap, while moderate A lets the B-gate dominate.
 
 ---
@@ -94,7 +94,7 @@ For each cell of these grids we:
 
 - Compute AM and BAM maps (no movement, no habitat loss).
 
-- Compute DeltaArea, DeltaGini, \(P_{suff}\), and K-spectrum summaries.
+- Compute \( \Delta_{Area} \), \( \Delta_{Gini} \), \(P_{suff}\), and K-spectrum summaries.
 
 - Aggregate across replicates to report means and quantile bands.
 
@@ -102,8 +102,91 @@ For each cell of these grids we:
 
 ## Expected qualitative patterns
 
-- DeltaArea decreases monotonically with connectance, diet redundancy, alignment, and niche breadth.
+- \( \Delta_{Area} \) decreases monotonically with connectance, diet redundancy, alignment, and niche breadth.
 - Low connectance and low alignment combine super-additively to yield the strongest AM to BAM penalties.
-- DeltaArea is well mediated by \(P_{suff}\) and by the K-spectrum; include a simple mediation scatter (DeltaArea vs \(P_{suff}\)).
+- \( \Delta_{Area} \) is well mediated by \(P_{suff}\) and by the K-spectrum; include a simple mediation scatter (\( \Delta_{Area} \) vs \(P_{suff}\)).
 
 This framework separates the biotically-aware correction (BAM) from abiotic-only maps (AM), and explains when and why that correction is large—before any habitat loss geometry is considered.
+
+### What we are measuring and why it changes
+
+We compare two ways to label a cell as 'suitable' for a species:
+
+1) **AM** (abiotic + movement, no biotic screen): a cell is suitable if its climate matches the species' niche (above a threshold \(\tau_A\)).
+2) **BAM–BSH** (biotic-aware): the same abiotic test **plus** a prey gate: a consumer must have at least \(k_{req}\) of its potential prey present in the cell.
+
+For each species we measure the fraction of the map it occupies under AM and under BAM, then define  
+\[
+\Delta \text{Area} = \text{AM}_{area} - \text{BAM}_{area}.
+\]  
+This is the amount of habitat that looks good abiotically but is removed once we check the food requirement.
+
+Two summary variables are key:
+
+- \(\pi_A\): among consumers, the average fraction of cells that pass the **abiotic** test (so they would be kept by AM).
+- \(P_{suff}\): among those A-eligible cells, the probability that the prey requirement is satisfied (there are \(\ge k_{req}\) prey).
+
+A useful approximation is  
+\[
+\Delta \text{Area} \approx \pi_A \times (1 - P_{suff}).
+\]  
+It reads as: 'how much abiotic opportunity is there' times 'how often the prey gate fails'.
+
+---
+
+### What the parameters mean
+
+- \(R_{95}\): an index of diet redundancy – roughly how many prey a consumer has within 95% of its diet mass. Larger \(R_{95}\) = more potential prey types.
+- \(\sigma\): niche breadth in climate space. Larger \(\sigma\) = broader abiotic tolerance.
+- *align*: how correlated species' climate optima are across the web. \(\text{align}=0\) means no correlation; \(\text{align}=1\) means predators and prey prefer very similar climates.
+- \(\tau_A\): the abiotic suitability threshold used by AM and by the first step of BAM.
+- *motif_mix*: which food-web motifs are emphasized when the synthetic metaweb is generated (e.g. more chains vs more omnivory).
+- \(P_{suff}\) (prey sufficiency): the empirical quantity  
+  \[
+  P(\ge k_{req} \; \text{prey present} \mid A\text{-eligible cell}).
+  \]  
+  It is the hinge variable for how much biotic gating removes from AM.
+
+---
+
+### Why \(\Delta \text{Area}\) peaks at mid alignment
+
+Alignment pushes two levers in opposite directions. As alignment increases, \(\pi_A\) tends to rise (more abiotic opportunity shared across species), but \(P_{suff}\) also rises (prey co-occur with consumers more often).  
+- At very low alignment: small \(\pi_A\) and small \(P_{suff}\).  
+- At very high alignment: large \(\pi_A\) and large \(P_{suff}\).  
+The product \(\pi_A \times (1 - P_{suff})\) is largest in between. That is why \(\Delta \text{Area}\) is maximal around mid alignment in our heat map.
+
+---
+
+### Why \(\Delta \text{Area}\) sometimes increases with \(R_{95}\) in the \(R_{95}\)–\(\sigma\) heat map
+
+Within consumers, increasing \(R_{95}\) raises redundancy and should make the prey gate easier to pass (\(P_{suff}\) ↑), so \(\Delta \text{Area}\) per consumer should go down.  
+However, as \(R_{95}\) grows our synthetic metawebs also shift in trophic composition: a larger share of species are consumers (basal species contribute ~0 to \(\Delta \text{Area}\)). When we average \(\Delta \text{Area}\) over all species, that composition effect can dominate and the mean can rise with \(R_{95}\) even if the consumer-only \(\Delta \text{Area}\) shrinks.
+
+The fix is to report both:  
+(i) \(\Delta \text{Area}\) among consumers only (the pure biotic-gate effect),  
+(ii) the fraction of consumers (composition),  
+and to make clear which average is being shown.
+
+---
+
+### How to read the (\(\delta, \kappa\)) heat map
+
+We also re-parametrize the axes into scale-free quantities:  
+- \(\delta = \sigma / L\): niche breadth relative to the grid's climate span.  
+- \(\kappa = k_{req} / R_{95}\): the prey requirement measured against redundancy.
+
+At fixed \(\delta\), \(\Delta \text{Area}\) decreases as \(\kappa \to 0\) (the gate is easy) and increases as \(\kappa \to 1\) (the gate is demanding relative to redundancy).  
+At fixed \(\kappa\), \(\Delta \text{Area}\) increases with \(\delta\) because AM offers more abiotic opportunity (\(\pi_A\) ↑).  
+This parameterization reveals the clean trade-off behind AM vs BAM differences.
+
+---
+
+### Take-home
+
+- \(\Delta \text{Area}\) is governed by \(\pi_A\) (abiotic admission) and \(P_{suff}\) (prey sufficiency).  
+- Mid alignment maximizes \(\Delta \text{Area}\) because it maximizes \(\pi_A\) while \(P_{suff}\) is not yet high.  
+- Apparent increases of \(\Delta \text{Area}\) with \(R_{95}\) in all-species averages are often composition effects; consumer-only summaries resolve the paradox.  
+- Using \(\delta\) and \(\kappa\) gives a scaleless view and produces smooth heat maps you can compare across grid sizes and species richness.
+
+
