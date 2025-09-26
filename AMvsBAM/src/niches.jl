@@ -2,7 +2,7 @@ module Niches
 
 using Random, Statistics, Distributions
 
-export make_climate_grid, make_niches
+export make_niches
 
 # """
 #     make_climate_grid(nx, ny; kind=:gradient)
