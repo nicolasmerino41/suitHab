@@ -42,5 +42,5 @@ begin
     axislegend(ax3, position=:lb, framevisible=false)
 
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "R95_decomposition.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs", "R95_decomposition_fractal.png"), fig)
 end
