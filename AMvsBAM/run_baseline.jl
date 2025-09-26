@@ -24,21 +24,21 @@ basal_frac    = 0.30
 nx, ny        = 40, 40
 τA            = 0.5
 kreq          = 1
-replicates    = 20
-
+replicates    = 20 # 20 is the original
+ 
 # Fixed defaults for slices
 default_R95   = 5
 default_C     = 0.10
 default_σ     = 0.12
 default_align = 0.4
 
-Cs     = range(0.01, 0.20; length=30)
-Aligns = range(0.0, 1.0; length=30)
+Cs     = range(0.01, 0.20; length=20)
+Aligns = range(0.0, 1.0; length=20)
 R95s   = Int.(range(1.0, 10.0; length=10))
 Sigmas = range(0.06, 0.24; length=24)
 
 # climate grid (choose gradient here)
-Cgrid = Climate.make_climate_grid(nx, ny; kind=:ridge, seed=11)
+Cgrid = Climate.make_climate_grid(nx, ny; kind=:fractal, seed=11)
 
 # ---------------------------
 # helpers
@@ -100,11 +100,11 @@ end
 sweep1 = NamedTuple[(; C=c, align=a) for c in Cs for a in Aligns]
 fixed1 = (; Cgrid=Cgrid, align=default_align, σ=default_σ, R95=default_R95,
            C=default_C, S=S, basal_frac=basal_frac, τA=τA, kreq=kreq)
-if true # Only run if needed
+if false # Only run if needed
     res1 = replicate_sweep(rng, sweep1; fixed=fixed1)
-    CSV.write(joinpath(@__DIR__, "data", "sweep_C_align_ridge.csv"), res1)
+    CSV.write(joinpath(@__DIR__, "data", "sweep_C_align_gradient.csv"), res1)
 end
-res1 = CSV.read(joinpath(@__DIR__, "data", "sweep_C_align.csv"), DataFrame)
+res1 = CSV.read(joinpath(@__DIR__, "data", "sweep_C_align_fractal.csv"), DataFrame)
 
 # Heatmap of ΔArea(C, align)
 begin
@@ -113,10 +113,11 @@ begin
     # grid
     xs = sort(unique(res1.C)); ys = sort(unique(res1.align))
     Z  = [first(res1.ΔAmean[(res1.C.==x) .& (res1.align.==y)]) for x in xs, y in ys]
+    lo, hi = extrema(Z)
     heatmap!(ax, xs, ys, Z')
-    cb = Colorbar(fig[1,2], label="ΔArea")
+    cb = Colorbar(fig[1,2], label="ΔArea", colorrange=(lo, hi))
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_C_align_ridge.png"), fig)
+    # save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_C_align_gradient.png"), fig)
 end
 
 # ΔArea vs Psuff scatter (mediation)
@@ -125,7 +126,7 @@ begin
     ax  = Axis(fig[1,1], xlabel="P_suff", ylabel="ΔArea", title="Mediation: ΔArea vs P_suff (C, align sweep)")
     scatter!(ax, res1.Pmean, res1.ΔAmean)
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "Scatter_DeltaArea_vs_Psuff_ridge.png"), fig)
+    # save(joinpath(@__DIR__, "data", "figs", "Scatter_DeltaArea_vs_Psuff_gradient.png"), fig)
 end
 
 # ---------------------------
@@ -134,12 +135,84 @@ end
 sweep2 = NamedTuple[(; R95=r, σ=s) for r in R95s for s in Sigmas]
 fixed2 = (; Cgrid=Cgrid, align=default_align, σ=default_σ, R95=default_R95,
            C=default_C, S=S, basal_frac=basal_frac, τA=τA, kreq=kreq)
-if true # Only run if you changed something
+if false # Only run if you changed something
     res2 = replicate_sweep(rng, sweep2; fixed=fixed2)
-    CSV.write(joinpath(@__DIR__, "data", "sweep_R_sigma_ridge.csv"), res2)
+    CSV.write(joinpath(@__DIR__, "data", "sweep_R_sigma_gradient.csv"), res2)
 end
-res2 = CSV.read(joinpath(@__DIR__, "data", "sweep_R_sigma.csv"), DataFrame)
+res2 = CSV.read(joinpath(@__DIR__, "data", "sweep_R_sigma_ridge.csv"), DataFrame)
+############## TEMPORARY: just for testing
+# --- SAFE R95–σ HEATMAP BUILDER ---------------------------------------------
+# 1) one row per (R95, σ) with mean ΔA (even if you had replicates written to the CSV)
+res2_clean = combine(groupby(res2, [:R95, :σ]),
+                     :ΔAmean => mean => :ΔA)
 
+# 2) sorted axes
+xs = sort(unique(res2_clean.R95))            # Int
+ys = sort(unique(res2_clean.σ))              # Float64
+
+# 3) build a dense matrix with no silent fallbacks
+Z = fill(NaN, length(xs), length(ys))
+let lut = Dict( (res2_clean.R95[i], res2_clean.σ[i]) => res2_clean.ΔA[i]
+                for i in 1:nrow(res2_clean) )
+    for (ix, x) in pairs(xs), (iy, y) in pairs(ys)
+        v = get(lut, (x, y), NaN)
+        Z[ix, iy] = v
+    end
+end
+
+# 4) checks: no gaps, unique combos
+@assert all(!isnan, Z) "Missing (R95, σ) combinations in res2."
+@assert nrow(res2_clean) == length(xs)*length(ys) "Duplicate or missing grid points."
+
+# 5) plot (note: Makie expects Z' if you want x across columns, y up rows)
+begin
+    fig = Figure(; size=(980,520))
+    ax  = Axis(fig[1,1],
+        xlabel = "R95 (diet redundancy)",
+        ylabel = "niche breadth σ",
+        title  = "ΔArea (AM − BAM) — R95 vs σ")
+
+    heatmap!(ax, xs, ys, permutedims(Z))   # <- transpose for x by y layout
+    Colorbar(fig[1,2], label="ΔArea")
+    display(fig)
+    # save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_R_sigma_FIXED.png"), fig)
+end
+
+using GLM, StatsModels
+m = lm(@formula(ΔA ~ 1 + R95 + σ), res2_clean)   # or add R95*σ if you want the interaction
+coef(m)  # look at the sign and magnitude on R95
+
+# after you build xs, ys, Z exactly as you posted
+@show size(Z)             # should be (length(xs), length(ys))
+@assert size(Z) == (length(xs), length(ys))
+
+# Column-wise means "over σ", i.e., trend along R95
+col_means = vec(mean(Z, dims=2))
+@show xs
+@show col_means           # should be ≈ monotone DOWN (small slope)
+
+# Row-wise means "over R95", i.e., trend along σ
+row_means = vec(mean(Z, dims=1))
+@show ys
+@show row_means           # should be clearly increasing with σ
+begin
+    lo, hi = extrema(Z)                 # e.g., (0.03, 0.20)
+
+    fig = Figure(; size=(980,520))
+    ax  = Axis(
+        fig[1,1],
+        xlabel = "R95 (diet redundancy)",
+        ylabel = "niche breadth σ",
+        title  = "ΔArea (AM − BAM) — R95 vs σ"
+    )
+
+    hm = heatmap!(ax, xs, ys, Z; colorrange=(lo, hi))   # <-- key line
+    Colorbar(fig[1,2], hm, label="ΔArea", ticks=round.(range(lo, hi; length=6), digits=2))
+    display(fig)
+
+end
+
+##########################################
 # Heatmap of ΔArea(R95, σ)
 begin
     fig = Figure(; size=(900,500))
@@ -149,7 +222,7 @@ begin
     heatmap!(ax, xs, ys, Z')
     cb = Colorbar(fig[1,2], label="ΔArea")
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_R_sigma_ridge.png"), fig)
+    # save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_R_sigma_gradient.png"), fig)
 end
 
 # ---- ΔGini bars at four illustrative corners (robust) ----
@@ -189,7 +262,7 @@ begin
     hlines!(ax, 0.0; color=:gray, linestyle=:dash)
     ax.xticklabelrotation = π/10  # optional: avoid label overlap
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "Bars_DeltaGini_corners_ridge.png"), fig)
+    # save(joinpath(@__DIR__, "data", "figs", "Bars_DeltaGini_corners_gradient.png"), fig)
 end
 
 println("Done. CSVs and figures written to data/ and data/figs/")
@@ -224,6 +297,31 @@ begin
     lines!(ax3, xs, Δ̂_y)
 
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "Mediation_curves_ridge.png"), fig)
+    # save(joinpath(@__DIR__, "data", "figs", "Mediation_curves_gradient.png"), fig)
 end
 
+# --- realized diet breadth vs R95 ---
+function mean_indegree_vs_R95(; rng=MersenneTwister(1), Rs=1:10, S=175, basal_frac=0.3, C=0.10)
+    means = Float64[]
+    for r in Rs
+        mw = MetaWeb.build_metaweb(rng; S=S, basal_frac=basal_frac, connectance=C, R95=r, motif_mix=:mixed)
+        indeg = [sum(mw.A[:,j]) for j in 1:size(mw.A,2)]               # in-degree per consumer column
+        is_cons = mw.trophic_role .!= :basal
+        push!(means, mean(indeg[is_cons]))
+    end
+    Rs, means
+end
+
+Rs, mdeg = mean_indegree_vs_R95()
+@info "Realized mean indegree by R95" (Rs=Rs, mean_indegree=mdeg)
+
+# build a lookup Dict keyed by (R95, σ)
+keyys = Tuple{Int,Float64}[(res2.R95[i], res2.σ[i]) for i in 1:nrow(res2)]
+lut  = Dict( keyys[i] => res2.ΔAmean[i] for i in 1:nrow(res2) )
+
+xs = sort(unique(res2.R95))
+ys = sort(unique(res2.σ))
+Z  = [get(lut, (x,y), NaN) for x in xs, y in ys]   # no silent fallbacks
+
+# optional: assert no NaNs
+@assert all(!isnan, Z) "Missing (R95, σ) combos in res2"
