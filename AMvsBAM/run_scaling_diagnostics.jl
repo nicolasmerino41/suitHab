@@ -22,39 +22,32 @@ include("src/metaweb.jl");    using .MetaWeb
 include("src/niches.jl");     using .Niches
 include("src/bam.jl");        using .BAM
 include("src/metrics.jl");    using .Metrics
-include("src/climate.jl");    using .climate
+include("src/climate.jl");    using .Climate
 const Mke = CairoMakie
 
 # ----------------------------------------------------------
 # General run helper (one replicate)
 # ----------------------------------------------------------
-function run_once(rng::AbstractRNG, Cgrid;
-                  S::Int, basal_frac::Float64,
-                  connectance::Float64, R95::Real,
-                  align::Real, σ::Real, τA::Real, kreq::Int,
-                  motif_mix::Symbol=:mixed)
-
-    # metaweb + niches
+function run_once(rng; Cgrid, align, σ, R95, motif_mix=:mixed,
+                  S=175, basal_frac=0.3, τA=0.5, kreq=1, connectance=0.10)
     mw = MetaWeb.build_metaweb(rng; S=S, basal_frac=basal_frac,
-                               connectance=connectance, R95=R95,
-                               motif_mix=motif_mix)
+                               connectance=connectance, R95=R95, motif_mix=motif_mix)
     μ, σi = Niches.make_niches(rng, S; align=align, σ=σ, basal_frac=basal_frac)
     pars  = BAM.Params(; τA=τA, kreq=kreq)
-
     out   = BAM.compute_AM_BAM(rng, mw, Cgrid, μ, σi, pars)
-    
+
     am = BAM.species_areas(out[:AM_maps])
     bm = BAM.species_areas(out[:BAM_maps])
 
     # who's a consumer?
-    is_cons = mw.trophic_role .== :consumer
+    is_cons = mw.trophic_role .!= :basal
     # average abiotic admission among consumers: π_A
     piA_cons = mean(am[is_cons])
 
     ΔA    = Metrics.delta_area(am, bm)
     ΔG    = Metrics.delta_gini(am, bm)
-    Psuff = BAM.prey_sufficiency(mw, out[:Akeep]; kreq=kreq)   # mediation metric
-    Ks    = BAM.K_spectrum(mw, out[:Akeep])                    # prey co-retention spectrum
+    Psuff = BAM.prey_sufficiency(mw, out[:Akeep]; kreq=kreq)
+    Ks    = BAM.K_spectrum(mw, out[:Akeep])
 
     return (ΔA=ΔA, ΔG=ΔG, Psuff=Psuff, Kmean=mean(Ks), Kp90=quantile(Ks,0.9), πA=piA_cons)
 end
@@ -65,8 +58,8 @@ qband(v) = (quantile(v, 0.05), mean(v), quantile(v, 0.95))
 # ----------------------------------------------------------
 # CONFIG (baseline)
 # ----------------------------------------------------------
-mkpath(joinpath(@__DIR__, "data"))
-mkpath(joinpath(@__DIR__, "data", "figs"))
+mkpath(joinpath(@__DIR__, "data/scaling_diagnostics"))
+mkpath(joinpath(@__DIR__, "data", "figs/scaling_diagnostics"))
 
 rng           = MersenneTwister(11)
 S0            = 175
@@ -104,7 +97,7 @@ for (nx, ny) in ((40,40), (80,80), (160,160))
     λ     = C0 * S0
     ρ     = S0 / (nx*ny)
 
-    vals = [run_once(MersenneTwister(rand(rng, 1:10^9)), Cgrid;
+    vals = [run_once(MersenneTwister(rand(rng, 1:10^9)); Cgrid = Cgrid,
                      S=S0, basal_frac=basal_frac,
                      connectance=C0, R95=R95_0,
                      align=align0, σ=σ0, τA=τA, kreq=kreq)
@@ -118,7 +111,7 @@ for (nx, ny) in ((40,40), (80,80), (160,160))
                     L, σhat, λ, ρ, ΔAlo, ΔAmean, ΔAhi, ΔGlo, ΔGmean, ΔGhi, Plo, Pmean, Phi))
 end
 
-CSV.write(joinpath(@__DIR__, "data", "finite_size.csv"), res_fs)
+CSV.write(joinpath(@__DIR__, "data/scaling_diagnostics", "finite_size.csv"), res_fs)
 
 # plot: ΔArea, ΔGini, P_suff vs Ncells
 begin
@@ -145,7 +138,7 @@ begin
         )
     lines!(ax3, res_fs.Ncells, res_fs.Pmean);  scatter!(ax3, res_fs.Ncells, res_fs.Pmean)
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "A_FiniteSize_convergence.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs/scaling_diagnostics", "A_FiniteSize_convergence.png"), fig)
 end
 
 # ----------------------------------------------------------
@@ -179,7 +172,7 @@ for S in S_list
     λ     = C * S
     ρ     = S / Ncells
 
-    vals = [run_once(MersenneTwister(rand(rng, 1:10^9)), Cgrid;
+    vals = [run_once(MersenneTwister(rand(rng, 1:10^9)); Cgrid=Cgrid,
                      S=S, basal_frac=basal_frac,
                      connectance=C, R95=R95_0,
                      align=align0, σ=σ0, τA=τA, kreq=kreq)
@@ -193,7 +186,7 @@ for S in S_list
                    L, σhat, λ, ρ, ΔAlo, ΔAmean, ΔAhi, ΔGlo, ΔGmean, ΔGhi, Plo, Pmean, Phi))
 end
 
-CSV.write(joinpath(@__DIR__, "data", "species_scaling.csv"), res_S)
+CSV.write(joinpath(@__DIR__, "data/scaling_diagnostics", "species_scaling.csv"), res_S)
 
 # plot: ΔArea, ΔGini, P_suff vs S  (markers show λ & ρ ~ constant)
 begin
@@ -205,7 +198,7 @@ begin
     ax3 = Axis(fig[1,3], xlabel="S", ylabel="P_suff", title="Species scaling (P_suff)")
     lines!(ax3, res_S.S, res_S.Pmean);  scatter!(ax3, res_S.S, res_S.Pmean)
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "B_Species_scaling.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs/scaling_diagnostics", "B_Species_scaling.png"), fig)
 end
 
 # ----------------------------------------------------------
@@ -227,7 +220,7 @@ for σ in Sigmas, R95 in R95s
     σhat = σ / L_mech
     κ    = kreq / R95
     C    = clamp(λ_target / S0, 0.01, 0.5)  # keep λ≈λ_target at S0
-    vals = [run_once(MersenneTwister(rand(rng, 1:10^9)), Cgrid_mech;
+    vals = [run_once(MersenneTwister(rand(rng, 1:10^9)); Cgrid=Cgrid_mech,
                      S=S0, basal_frac=basal_frac,
                      connectance=C, R95=R95,
                      align=align0, σ=σ, τA=τA, kreq=kreq)
@@ -238,7 +231,7 @@ for σ in Sigmas, R95 in R95s
     push!(res_mech, (; σ, R95, σhat, κ, ΔAlo, ΔAmean, ΔAhi, Plo, Pmean, Phi))
 end
 
-CSV.write(joinpath(@__DIR__, "data", "mechanism_sigmahat_kappa.csv"), res_mech)
+CSV.write(joinpath(@__DIR__, "data/scaling_diagnostics", "mechanism_sigmahat_kappa.csv"), res_mech)
 
 # Heatmap ΔArea over (σ̂, κ)
 begin
@@ -251,7 +244,7 @@ begin
     heatmap!(ax, xs, ys, Z')
     Colorbar(fig[1,2], label="ΔArea")
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "C_HM_DeltaArea_sigmahat_kappa.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs/scaling_diagnostics", "C_HM_DeltaArea_sigmahat_kappa.png"), fig)
 end
 
 # Also show mediation: ΔArea vs P_suff for these runs
@@ -261,7 +254,7 @@ begin
                title="Mediation: ΔArea vs P_suff (σ̂, κ sweep)")
     scatter!(ax, res_mech.Pmean, res_mech.ΔAmean)
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs", "C_Scatter_DeltaArea_vs_Psuff.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs/scaling_diagnostics", "C_Scatter_DeltaArea_vs_Psuff.png"), fig)
 end
 
 println("Done. Wrote:")
