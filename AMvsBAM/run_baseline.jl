@@ -3,7 +3,6 @@
 # Produces CSVs and PNGs in data/ and data/figs/
 # Plots use Makie; each plot is wrapped in begin...display(fig) blocks
 # ==========================================================
-
 include("../SetUp.jl");
 include("src/metaweb.jl");   using .MetaWeb
 include("src/niches.jl");   using .Niches
@@ -32,13 +31,14 @@ default_C     = 0.10
 default_σ     = 0.12
 default_align = 0.4
 
-Cs     = range(0.01, 0.20; length=20)
-Aligns = range(0.0, 1.0; length=20)
+Cs     = range(0.01, 0.20; length=40)
+Aligns = range(0.0, 1.0; length=40)
 R95s   = Int.(range(1.0, 10.0; length=10))
-Sigmas = range(0.06, 0.24; length=24)
+Sigmas = range(0.02, 0.3; length=30)
 
 # climate grid (choose gradient here)
-Cgrid = Climate.make_climate_grid(nx, ny; kind=:fractal, seed=11)
+grid_type = "fractal"
+Cgrid = Climate.make_climate_grid(nx, ny; kind=Symbol(grid_type), seed=11)
 
 # ---------------------------
 # helpers
@@ -100,11 +100,11 @@ end
 sweep1 = NamedTuple[(; C=c, align=a) for c in Cs for a in Aligns]
 fixed1 = (; Cgrid=Cgrid, align=default_align, σ=default_σ, R95=default_R95,
            C=default_C, S=S, basal_frac=basal_frac, τA=τA, kreq=kreq)
-if false # Only run if needed
+if true # Only run if needed
     res1 = replicate_sweep(rng, sweep1; fixed=fixed1)
-    CSV.write(joinpath(@__DIR__, "data", "sweep_C_align_gradient.csv"), res1)
+    CSV.write(joinpath(@__DIR__, "data", "sweep_C_align_$grid_type.csv"), res1)
 end
-res1 = CSV.read(joinpath(@__DIR__, "data", "sweep_C_align_fractal.csv"), DataFrame)
+res1 = CSV.read(joinpath(@__DIR__, "data", "sweep_C_align_$grid_type.csv"), DataFrame)
 
 # Heatmap of ΔArea(C, align)
 begin
@@ -117,7 +117,7 @@ begin
     heatmap!(ax, xs, ys, Z')
     cb = Colorbar(fig[1,2], label="ΔArea", colorrange=(lo, hi))
     display(fig)
-    # save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_C_align_gradient.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_C_align_$grid_type.png"), fig)
 end
 
 # ΔArea vs Psuff scatter (mediation)
@@ -126,7 +126,7 @@ begin
     ax  = Axis(fig[1,1], xlabel="P_suff", ylabel="ΔArea", title="Mediation: ΔArea vs P_suff (C, align sweep)")
     scatter!(ax, res1.Pmean, res1.ΔAmean)
     display(fig)
-    # save(joinpath(@__DIR__, "data", "figs", "Scatter_DeltaArea_vs_Psuff_gradient.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs", "Scatter_DeltaArea_vs_Psuff_$grid_type.png"), fig)
 end
 
 # ---------------------------
@@ -135,11 +135,11 @@ end
 sweep2 = NamedTuple[(; R95=r, σ=s) for r in R95s for s in Sigmas]
 fixed2 = (; Cgrid=Cgrid, align=default_align, σ=default_σ, R95=default_R95,
            C=default_C, S=S, basal_frac=basal_frac, τA=τA, kreq=kreq)
-if false # Only run if you changed something
+if true # Only run if you changed something
     res2 = replicate_sweep(rng, sweep2; fixed=fixed2)
-    CSV.write(joinpath(@__DIR__, "data", "sweep_R_sigma_gradient.csv"), res2)
+    CSV.write(joinpath(@__DIR__, "data", "sweep_R_sigma_$grid_type.csv"), res2)
 end
-res2 = CSV.read(joinpath(@__DIR__, "data", "sweep_R_sigma_ridge.csv"), DataFrame)
+res2 = CSV.read(joinpath(@__DIR__, "data", "sweep_R_sigma_$grid_type.csv"), DataFrame)
 ############## TEMPORARY: just for testing
 # --- SAFE R95–σ HEATMAP BUILDER ---------------------------------------------
 # 1) one row per (R95, σ) with mean ΔA (even if you had replicates written to the CSV)
@@ -165,18 +165,18 @@ end
 @assert nrow(res2_clean) == length(xs)*length(ys) "Duplicate or missing grid points."
 
 # 5) plot (note: Makie expects Z' if you want x across columns, y up rows)
-begin
-    fig = Figure(; size=(980,520))
-    ax  = Axis(fig[1,1],
-        xlabel = "R95 (diet redundancy)",
-        ylabel = "niche breadth σ",
-        title  = "ΔArea (AM − BAM) — R95 vs σ")
+# begin
+#     fig = Figure(; size=(980,520))
+#     ax  = Axis(fig[1,1],
+#         xlabel = "R95 (diet redundancy)",
+#         ylabel = "niche breadth σ",
+#         title  = "ΔArea (AM − BAM) — R95 vs σ")
 
-    heatmap!(ax, xs, ys, permutedims(Z))   # <- transpose for x by y layout
-    Colorbar(fig[1,2], label="ΔArea")
-    display(fig)
-    # save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_R_sigma_FIXED.png"), fig)
-end
+#     heatmap!(ax, xs, ys, permutedims(Z))   # <- transpose for x by y layout
+#     Colorbar(fig[1,2], label="ΔArea")
+#     display(fig)
+#     # save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_R_sigma_FIXED.png"), fig)
+# end
 
 using GLM, StatsModels
 m = lm(@formula(ΔA ~ 1 + R95 + σ), res2_clean)   # or add R95*σ if you want the interaction
@@ -209,21 +209,21 @@ begin
     hm = heatmap!(ax, xs, ys, Z; colorrange=(lo, hi))   # <-- key line
     Colorbar(fig[1,2], hm, label="ΔArea", ticks=round.(range(lo, hi; length=6), digits=2))
     display(fig)
-
+    save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_R_sigma_$grid_type.png"), fig)
 end
 
 ##########################################
 # Heatmap of ΔArea(R95, σ)
-begin
-    fig = Figure(; size=(900,500))
-    ax  = Axis(fig[1,1], xlabel="R95 (diet redundancy)", ylabel="niche breadth σ", title="ΔArea (AM-BAM) — R95 vs σ")
-    xs = sort(unique(res2.R95)); ys = sort(unique(res2.σ))
-    Z  = [first(res2.ΔAmean[(res2.R95.==x) .& (res2.σ.==y)]) for x in xs, y in ys]
-    heatmap!(ax, xs, ys, Z')
-    cb = Colorbar(fig[1,2], label="ΔArea")
-    display(fig)
-    # save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_R_sigma_gradient.png"), fig)
-end
+# begin
+#     fig = Figure(; size=(900,500))
+#     ax  = Axis(fig[1,1], xlabel="R95 (diet redundancy)", ylabel="niche breadth σ", title="ΔArea (AM-BAM) — R95 vs σ")
+#     xs = sort(unique(res2.R95)); ys = sort(unique(res2.σ))
+#     Z  = [first(res2.ΔAmean[(res2.R95.==x) .& (res2.σ.==y)]) for x in xs, y in ys]
+#     heatmap!(ax, xs, ys, Z')
+#     cb = Colorbar(fig[1,2], label="ΔArea")
+#     display(fig)
+#     # save(joinpath(@__DIR__, "data", "figs", "HM_DeltaArea_R_sigma_$grid_type.png"), fig)
+# end
 
 # ---- ΔGini bars at four illustrative corners (robust) ----
 # Helper: return the dataframe row in `df` nearest to (Rtarget, σtarget)
@@ -262,7 +262,7 @@ begin
     hlines!(ax, 0.0; color=:gray, linestyle=:dash)
     ax.xticklabelrotation = π/10  # optional: avoid label overlap
     display(fig)
-    # save(joinpath(@__DIR__, "data", "figs", "Bars_DeltaGini_corners_gradient.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs", "Bars_DeltaGini_corners_$grid_type.png"), fig)
 end
 
 println("Done. CSVs and figures written to data/ and data/figs/")
@@ -297,7 +297,7 @@ begin
     lines!(ax3, xs, Δ̂_y)
 
     display(fig)
-    # save(joinpath(@__DIR__, "data", "figs", "Mediation_curves_gradient.png"), fig)
+    save(joinpath(@__DIR__, "data", "figs", "Mediation_curves_$grid_type.png"), fig)
 end
 
 # --- realized diet breadth vs R95 ---
