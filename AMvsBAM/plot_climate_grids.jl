@@ -33,5 +33,8 @@ function plot_climate_grids(grid_grad, grid_ridge, grid_fractal; outpath=nothing
 end
 
 # Example (note the variable name fix):
-plot_climate_grids(grid_gradient, grid_ridge, Cgrid; outpath="AMvsBAM/data/figs/final/climate_grids.png")
+grid_gradient = Climate.make_climate_grid(nx, ny; kind=:gradient, seed=11)
+grid_ridge = Climate.make_climate_grid(nx, ny; kind=:ridge, seed=11)
+grid_fractal = Climate.make_climate_grid(nx, ny; kind=:fractal, seed=11)
+plot_climate_grids(grid_gradient, grid_ridge, grid_fractal; outpath="AMvsBAM/data/figs/final/climate_grids.png")
 
