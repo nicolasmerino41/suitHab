@@ -300,8 +300,8 @@ function maybe_read(path)
 end
 
 begin
-    df_grid = maybe_read(joinpath(datadir, "scaling_grid.csv"))     # expects cols: cells, metric, value, grid
-    df_S    = maybe_read(joinpath(datadir, "scaling_species.csv"))  # expects cols: S, metric, value, grid
+    df_grid = maybe_read(joinpath(datadir, "scaling_grid_gradient.csv"))     # expects cols: cells, metric, value, grid
+    df_S    = maybe_read(joinpath(datadir, "scaling_species_gradient.csv"))  # expects cols: S, metric, value, grid
     if !(df_grid === nothing)
         fig = Figure(; size=(1100, 380))
         for (j,g) in enumerate(GRIDS)

@@ -3,7 +3,7 @@
     using Pkg
     using Random, CairoMakie, StatsBase, Statistics
     using DataFrames, CSV
-    using Printf
+    using Printf, GLM
     Pkg.activate(joinpath("C:\\Users", PC, "OneDrive\\PhD\\GitHub\\suitHab"))
     cd(joinpath("C:\\Users", PC, "OneDrive\\PhD\\GitHub\\suitHab"))
     import Base.Threads: @threads
