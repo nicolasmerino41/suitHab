@@ -79,20 +79,33 @@ function fig01_heatmaps_C_align(res1_by_grid)
     display(fig)
 end
 
-# ----- Figure 02: R95×σ heatmaps side-by-side (one colorbar per grid) -----
+# ----- Figure 02 (FIXED): R95×σ heatmaps side-by-side (one colorbar per grid) -----
 function fig02_heatmaps_R_sigma(res2_by_grid)
     fig = Figure(size=(1500, 520))
     for (j,g) in enumerate(GRIDS)
         df = res2_by_grid[g]
-        df_clean = combine(groupby(df, [:R95, :σ]), :ΔAmean => mean => :ΔA)
-        xs = sort(unique(df_clean.R95)); ys = sort(unique(df_clean.σ))
-        lut = Dict((df_clean.R95[i], df_clean.σ[i]) => df_clean.ΔA[i] for i in 1:nrow(df_clean))
-        Z = [lut[(x,y)] for y in ys, x in xs]   # rows=y, cols=x (no permute)
-        ax = Axis(fig[1,j], title="ΔArea (AM−BAM) — R95×σ — $(g)",
-                  xlabel="R95 (diet redundancy)", ylabel=(j==1 ? "niche breadth σ" : ""))
+
+        # collapse replicates (if any) so we have one value per (R95, σ)
+        dfc = combine(groupby(df, [:R95, :σ]), :ΔAmean => mean => :ΔA)
+
+        # axes
+        xs = sort(unique(dfc.R95))          # R95 along the x-axis (left → right)
+        ys = sort(unique(dfc.σ))            # σ  along the y-axis (bottom → top)
+
+        # dense matrix with x-first indexing (NO transpose later)
+        lut = Dict((dfc.R95[i], dfc.σ[i]) => dfc.ΔA[i] for i in 1:nrow(dfc))
+        Z   = [lut[(x, y)] for x in xs, y in ys]   # size = (length(xs), length(ys))
+
+        # plot
+        ax = Axis(fig[1,j],
+                  title  = "ΔArea (AM−BAM) — R95×σ — $(g)",
+                  xlabel = "R95 (diet redundancy)",
+                  ylabel = (j == 1 ? "niche breadth σ" : ""))
+
         hm = heatmap!(ax, xs, ys, Z; interpolate=false)
         Colorbar(fig[2,j], hm, vertical=false, label="ΔArea")
     end
+
     save(joinpath(figdir, "02_HM_DeltaArea_R95_sigma_all_grids.png"), fig)
     display(fig)
 end
@@ -192,38 +205,51 @@ end
 
 # ----- SI-1: Variability maps + fraction-above + ECDFs -----
 function si01_variability_and_fraction(res1_by_grid, res2_by_grid; τmode=:p90)
-    # variability proxy: SD ≈ (ΔAhi - ΔAlo)/1.349
-    # fraction-above: fraction of ΔAmean > τ where τ is grid-specific (p90 by default)
-    # ECDFs: per grid, three regimes (pick by eye): low, mid, high alignment slices
-    # Outputs three multi-panels.
-    # (A) variability maps
+    # helper: convert IQR to SD and then to CV
+    iqr_to_sd(iqr) = iqr / 1.349
+    safe_div(num, den) = num / (abs(den) < eps(Float64) ? eps(Float64) : den)
+
+    # (A) CV maps over C×align
     figA = Figure(size=(1500, 520))
     for (j,g) in enumerate(GRIDS)
         df = res1_by_grid[g]
         xs = sort(unique(df.C)); ys = sort(unique(df.align))
-        sdproxy = iqr_to_sd.(df.ΔAhi .- df.ΔAlo)
-        lut = Dict((df.C[i], df.align[i]) => sdproxy[i] for i in 1:nrow(df))
-        Z = [lut[(x,y)] for y in ys, x in xs]
-        ax = Axis(figA[1,j], title="Var proxy (C×align) — $(g)", xlabel="C", ylabel=(j==1 ? "align" : ""))
+        # SD from IQR band:
+        sd_est = iqr_to_sd.(df.ΔAhi .- df.ΔAlo)
+        # CV = SD / mean, guarded against tiny means
+        cv = similar(sd_est)
+        @inbounds for i in eachindex(sd_est)
+            cv[i] = safe_div(sd_est[i], df.ΔAmean[i])
+        end
+        lut = Dict((df.C[i], df.align[i]) => cv[i] for i in 1:nrow(df))
+        Z = [lut[(x,y)] for y in ys, x in xs]   # rows=y, cols=x
+        ax = Axis(figA[1,j], title="CV(ΔArea) — C×align — $(g)",
+                  xlabel="C", ylabel=(j==1 ? "align" : ""))
         hm = heatmap!(ax, xs, ys, Z)
-        Colorbar(figA[2,j], hm, vertical=false, label="proxy SD")
+        Colorbar(figA[2,j], hm, vertical=false, label="CV = SD/mean")
     end
-    save(joinpath(figdir, "SI01A_varproxy_C_align.png"), figA)
+    save(joinpath(figdir, "SI01A_CV_C_align.png"), figA)
 
+    # (B) CV maps over R95×σ
     figB = Figure(size=(1500, 520))
     for (j,g) in enumerate(GRIDS)
         df = res2_by_grid[g]
-        dfc = combine(groupby(df, [:R95, :σ]), [:ΔAlo,:ΔAhi] => ((lo,hi)-> iqr_to_sd.(hi.-lo) |> mean) => :SD)
+        # collapse to one row per (R95,σ)
+        dfc = combine(groupby(df, [:R95, :σ]),
+                      :ΔAmean => mean => :μ,
+                      [:ΔAlo, :ΔAhi] => ((lo,hi) -> mean(iqr_to_sd.(hi .- lo))) => :sd)
         xs = sort(unique(dfc.R95)); ys = sort(unique(dfc.σ))
-        lut = Dict((dfc.R95[i], dfc.σ[i]) => dfc.SD[i] for i in 1:nrow(dfc))
+        cv = [safe_div(dfc.sd[i], dfc.μ[i]) for i in 1:nrow(dfc)]
+        lut = Dict((dfc.R95[i], dfc.σ[i]) => cv[i] for i in 1:nrow(dfc))
         Z = [lut[(x,y)] for y in ys, x in xs]
-        ax = Axis(figB[1,j], title="Var proxy (R95×σ) — $(g)", xlabel="R95", ylabel=(j==1 ? "σ" : ""))
+        ax = Axis(figB[1,j], title="CV(ΔArea) — R95×σ — $(g)",
+                  xlabel="R95", ylabel=(j==1 ? "σ" : ""))
         hm = heatmap!(ax, xs, ys, Z)
-        Colorbar(figB[2,j], hm, vertical=false, label="proxy SD")
+        Colorbar(figB[2,j], hm, vertical=false, label="CV = SD/mean")
     end
-    save(joinpath(figdir, "SI01B_varproxy_R95_sigma.png"), figB)
+    save(joinpath(figdir, "SI01B_CV_R95_sigma.png"), figB)
 
-    # (B) fraction-above maps (grid-specific τ so panels are informative)
+    # (C) fraction-above maps (unchanged logic; τ is grid-specific)
     figC = Figure(size=(1650, 520))
     for (j,g) in enumerate(GRIDS)
         df = res1_by_grid[g]
@@ -232,16 +258,14 @@ function si01_variability_and_fraction(res1_by_grid, res2_by_grid; τmode=:p90)
         xs = sort(unique(df.C)); ys = sort(unique(df.align))
         lut = Dict((df.C[i], df.align[i]) => (df.ΔAmean[i] > τ ? 1.0 : 0.0) for i in 1:nrow(df))
         Z = [lut[(x,y)] for y in ys, x in xs]
-        ax = Axis(figC[1,j], title="Frac(ΔArea>$(round(τ,digits=3))) — C×align — $(g)",
+        ax = Axis(figC[1,j], title="Frac(ΔArea > $(round(τ, digits=3))) — C×align — $(g)",
                   xlabel="C", ylabel=(j==1 ? "align" : ""))
         hm = heatmap!(ax, xs, ys, Z; colormap=:viridis)
         Colorbar(figC[2,j], hm, vertical=false, label="fraction > τ", ticks=[0,0.5,1.0])
     end
     save(joinpath(figdir, "SI01C_fraction_above.png"), figC)
 
-    display(figA)
-    display(figB)
-    display(figC)
+    display(figA); display(figB); display(figC)
 end
 
 # ----- SI-3: Mechanism (same content as Fig04 but it’s explicitly an SI figure) -----
