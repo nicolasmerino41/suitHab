@@ -41,10 +41,10 @@ function make_climate_grid(nx::Int, ny::Int; kind::Symbol=:gradient, seed::Int=1
     elseif kind == :ridge
         # two broader ridges + low background (laxer than before)
         x = range(0, 1; length=nx); y = range(0, 1; length=ny)
-        σ1, σ2 = 0.08, 0.10       # <- widened from 0.05, 0.07
-        base  = 0.10              # <- small background everywhere
+        σ1, σ2 = 0.10, 0.20       # <- widened from 0.05, 0.07
+        base  = 0.15              # <- small background everywhere
         G = [ base +
-              exp(-((x[i]-0.50)^2 + (y[j]-0.22)^2)/(2*σ1^2)) +
+              exp(-((x[i]-0.70)^2 + (y[j]-0.22)^2)/(2*σ1^2)) +
               exp(-((x[i]-0.30)^2 + (y[j]-0.70)^2)/(2*σ2^2))
               for i=1:nx, j=1:ny ]
         return _norm01(G)
