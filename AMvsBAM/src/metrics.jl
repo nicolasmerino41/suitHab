@@ -18,6 +18,21 @@ end
 delta_area(am::AbstractVector{<:Real}, bam::AbstractVector{<:Real}) = mean(am) - mean(bam)
 delta_gini(am::AbstractVector{<:Real}, bam::AbstractVector{<:Real}) = gini(am) - gini(bam)
 
-qband(xs::AbstractVector{<:Real}) = (quantile(xs,0.1), mean(xs), quantile(xs,0.9))
+# Quantile band that ignores NaNs/missings; returns (NaN,NaN,NaN) if nothing left
+function qband(xs::AbstractVector{<:Real}; lo=0.1, hi=0.9)
+    v = Float64[]
+    @inbounds for x in xs
+        if x !== missing
+            y = float(x)
+            if isfinite(y) && !isnan(y)
+                push!(v, y)
+            end
+        end
+    end
+    if isempty(v)
+        return (NaN, NaN, NaN)
+    end
+    return (quantile(v, lo), median(v), quantile(v, hi))
+end
 
 end # module
