@@ -498,10 +498,12 @@ end
 # ------------------------
 # Public API
 # ------------------------
-function build_metaweb(rng::AbstractRNG; S::Int=175, basal_frac::Float64=0.30,
-                       connectance::Float64=0.10, R95::Int=5, motif_mix::Symbol=:mixed,
-                       degree_tail::Symbol=:powerlaw, α_out::Float64=3.0,
-                       α_in::Float64=1.5, kmin_out::Int=1)
+function build_metaweb(
+    rng; S::Int=175, basal_frac::Float64=0.30,
+    connectance::Float64=0.10, R95::Int=5, motif_mix::Symbol=:mixed,
+    degree_tail::Symbol=:powerlaw, α_out::Float64=2.2, α_in::Float64=1.6,
+    kmin_out::Int=1, align::Float64=0.5
+)
 
     masses = _sorted_masses(rng, S)
     roles  = _trophic_roles(S, basal_frac)
@@ -512,27 +514,47 @@ function build_metaweb(rng::AbstractRNG; S::Int=175, basal_frac::Float64=0.30,
         return Metaweb(S, basal_frac, BitMatrix(A), roles)
     end
 
-    # map R95 to mild shape tweaks (your original knobs)
-    r = clamp(R95, 1, 10)
-    band   = 0.06 + 0.006*(r-5)
-    decay  = 0.03 - 0.002*(r-5)
+    # map R95 to mild shape tweaks (original knobs)
+    r     = clamp(R95, 1, 10)
+    band0 = 0.06 + 0.006*(r-5)   # baseline band for chains component
+    dec0  = 0.03 - 0.002*(r-5)   # baseline decay for omnivory component
+
+    # --- NEW: alignment-dependent motif shaping (ecological compensation) ---
+    # phi controls strength of compensation; 0.0 = off, 1.0 = strong
+    phi = 0.8
+    cent = align - 0.5              # [-0.5, +0.5]
+    # when align is LOW (cent<0):
+    #   - widen band (more vertical reach),
+    #   - lower decay (more long-range/omnivory),
+    #   - mix more toward omnivory
+    band   = band0 * (1.0 + phi * (-cent))              # wider if align low
+    decay  = max(1e-3, dec0  * (1.0 - 0.9*phi * (-cent))) # shallower if align low
+    w_chain_eff = clamp(0.6 - 0.5*phi * (-cent), 0.1, 0.9) # shift weight toward omnivory at low align
 
     P = if motif_mix == :omnivory
-        _shape_omnivory(S; decay=max(1e-3, decay))
+        _shape_omnivory(S; decay=decay)
+    elseif motif_mix == :mixed
+        _shape_mixed(S; band_frac=band, decay=decay, w_chain=w_chain_eff)
     else
-        _shape_mixed(S; band_frac=band, decay=max(1e-3,decay), w_chain=0.6)
+        # :chains – handled later by _build_metaweb_chains
+        _shape_chains(S; band_frac=band)  # only used for degree_tail=:none branch
     end
 
     # zero-out basal rows
     P[1:nb, :] .= 0.0
-
+    
     if degree_tail == :none
         A = _sample_to_connectance(rng, P, connectance; nb=nb)
         return Metaweb(S, basal_frac, A, roles)
     end
+    # inside _build_heavytail call, compute α_out_eff from align:
+    # α_out_eff = clamp( (α_out + 1.2*(align - 0.5)), 1.2, 3.5)
+    α_out_eff = clamp(α_out + 2.0*(align - 0.5), 1.2, 4.0)  # ±1 shift across 0..1
+    # low align (~0) → α_out_eff ≈ α_out - 0.6 (more generalists)
+    # high align (~1) → α_out_eff ≈ α_out + 0.6 (more specialists)
 
     A = _build_heavytail(rng; S=S, nb=nb, Ctarget=connectance, P=P,
-                         α_out=α_out, α_in=α_in, kmin_out=kmin_out, R95=R95)
+                     α_out=α_out_eff, α_in=α_in, kmin_out=kmin_out, R95=R95)
 
     return Metaweb(S, basal_frac, A, roles)
 end
