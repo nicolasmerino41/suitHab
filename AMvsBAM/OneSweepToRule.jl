@@ -130,7 +130,7 @@ fixed1 = (; Cgrid=Cgrid, align=default_align, σ=default_σ, R95=default_R95,
            C=default_C, S=S, basal_frac=basal_frac, τA=τA, kreq=kreq)
 # if true # Only run if needed
 res1 = replicate_sweep(rng, sweep1; fixed=fixed1)
-CSV.write(joinpath(@__DIR__, "data", "sweep_C_align_$grid_type.csv"), res1)
+CSV.write(joinpath(@__DIR__, "data", "OneSweepToRule_$(grid_type)_mixed.csv"), res1)
 # end
 res1 = CSV.read(joinpath(@__DIR__, "data", "OneSweepToRule_$(grid_type)_mixed.csv"), DataFrame)
 
