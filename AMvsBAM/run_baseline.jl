@@ -19,7 +19,7 @@ mkpath(joinpath(@__DIR__, "data"))
 mkpath(joinpath(@__DIR__, "data", "figs"))
 
 rng           = MersenneTwister(1)
-S             = 175
+S             = 400
 basal_frac    = 0.30
 nx, ny        = 40, 40
 τA            = 0.5
@@ -35,19 +35,20 @@ default_align = 0.4
 Cs     = range(0.001, 0.1; length=25)
 Aligns = range(0.0, 1.0; length=15)
 R95s   = Int.(range(1.0, 10.0; length=10))
-Sigmas = range(0.02, 1.0; length=20)
+Sigmas = range(0.02, 0.3; length=20)
 
 # climate grid (choose gradient here)
-grid_type = "ridge"
+grid_type = "fractal"
 Cgrid = Climate.make_climate_grid(nx, ny; kind=Symbol(grid_type), seed=11)
 
 # ---------------------------
 # helpers
 # ---------------------------
-function run_once(rng; Cgrid, align, σ, R95, motif_mix=:chains,
+function run_once(rng; Cgrid, align, σ, R95, motif_mix=:mixed,
                   S=175, basal_frac=0.3, τA=0.5, kreq=1, connectance=0.10)
     mw = MetaWeb.build_metaweb(rng; S=S, basal_frac=basal_frac,
-                               connectance=connectance, R95=R95, motif_mix=motif_mix)
+                           connectance=connectance, R95=R95,
+                           motif_mix=motif_mix, align=align)
     μ, σi = Niches.make_niches(rng, S; align=align, σ=σ, basal_frac=basal_frac)
     pars  = BAM.Params(; τA=τA, kreq=kreq)
     out   = BAM.compute_AM_BAM(rng, mw, Cgrid, μ, σi, pars)
@@ -92,7 +93,7 @@ function replicate_sweep(rng, sweep; fixed::NamedTuple, replicates::Int=20)
                          σ = get(pars, :σ, fixed.σ),
                          R95 = get(pars, :R95, fixed.R95),
                          connectance = get(pars, :C, fixed.C),
-                         motif_mix = get(pars, :motif, :chains),
+                         motif_mix = get(pars, :motif, :mixed),
                          S=fixed.S, basal_frac=fixed.basal_frac,
                          τA=fixed.τA, kreq=fixed.kreq)
                 for _ in 1:replicates]
