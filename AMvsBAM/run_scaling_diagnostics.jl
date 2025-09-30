@@ -62,7 +62,7 @@ mkpath(joinpath(@__DIR__, "data/scaling_diagnostics"))
 mkpath(joinpath(@__DIR__, "data", "figs/scaling_diagnostics"))
 
 rng           = MersenneTwister(11)
-S0            = 175
+S0            = 300
 basal_frac    = 0.30
 τA            = 0.50
 kreq          = 1
@@ -138,7 +138,7 @@ begin
         )
     lines!(ax3, res_fs.Ncells, res_fs.Pmean);  scatter!(ax3, res_fs.Ncells, res_fs.Pmean)
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs/scaling_diagnostics", "A_FiniteSize_convergence.png"), fig)
+    # save(joinpath(@__DIR__, "data", "figs/scaling_diagnostics", "A_FiniteSize_convergence.png"), fig)
 end
 
 # ----------------------------------------------------------
@@ -147,7 +147,7 @@ end
 λ_target = C0 * S0                      # keep mean degree
 ρ_target = S0 / (nx0 * ny0)             # keep crowding per area
 
-S_list   = [75, 150, 300, 600]          # will adapt grid and C to match targets
+S_list   = [75, 150, 300, 600, 1200]          # will adapt grid and C to match targets
 
 res_S = DataFrame(S=Int[], nx=Int[], ny=Int[], Ncells=Int[], C=Float64[],
                   R95=Float64[], σ=Float64[], align=Float64[],
@@ -198,7 +198,7 @@ begin
     ax3 = Axis(fig[1,3], xlabel="S", ylabel="P_suff", title="Species scaling (P_suff)")
     lines!(ax3, res_S.S, res_S.Pmean);  scatter!(ax3, res_S.S, res_S.Pmean)
     display(fig)
-    save(joinpath(@__DIR__, "data", "figs/scaling_diagnostics", "B_Species_scaling.png"), fig)
+    # save(joinpath(@__DIR__, "data", "figs/scaling_diagnostics", "B_Species_scaling.png"), fig)
 end
 
 # ----------------------------------------------------------
