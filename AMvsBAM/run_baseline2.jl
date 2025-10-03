@@ -26,14 +26,14 @@ replicates    = 10
 # Defaults for slices
 default_R95   = 5
 default_C     = 0.10
-default_σ     = 0.12
+default_σ     = 0.4
 default_align = 0.4
 
 Cs     = range(0.001, 0.10; length=16)
 Sigmas = range(0.02, 0.30; length=16)
 
 # climate grid
-grid_type = "fractal"   # try "gradient" or "fractal" too
+grid_type = "gradient"   # try "gradient" or "fractal" too
 Cgrid = Climate.make_climate_grid(nx, ny; kind=Symbol(grid_type), seed=11)
 
 # ---------------------------
@@ -238,7 +238,7 @@ save(joinpath(@__DIR__, "data/UNI", "figs", "HM_DeltaArea_C_sigma_$grid_type.png
 # ---------------------------
 # EXAMPLE SWEEP B: (R95, σ) → control=:R95, C free
 # ---------------------------
-R95s = collect(1:10)
+R95s   = Int.(range(4.0, 40.0; length=10))
 sweep_Rσ = NamedTuple[(; R95=r, σ=s) for r in R95s for s in Sigmas]
 fixed_Rσ = (; Cgrid=Cgrid, align=default_align, σ=default_σ, R95=default_R95,
             C=default_C, S=S, basal_frac=basal_frac, τA=τA, kreq=kreq)
@@ -282,4 +282,5 @@ res_C_align = replicate_sweep(rng, sweep_C_align; fixed=fixed_C_align, replicate
 # Heatmap ΔArea(C, align)
 fig_HM_C_align = heatmap_from_results(res_C_align, :C, :align;
     title="ΔArea (AM–BAM) — C vs align $(grid_type)")
-save(joinpath(@__DIR__, "data/UNI/figs", "HM_DeltaArea_C_align_$(grid_type).png"), fig_HM_C_align) 
+save(joinpath(@__DIR__, "data/UNI/figs", "HM_DeltaArea_C_align_$(grid_type).png"), fig_HM_C_align)
+
