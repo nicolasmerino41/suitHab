@@ -1,6 +1,6 @@
 ############## run_baseline2.jl — clean recording of free variables ##############
 
-include("../SetUp.jl")
+include("../SetUp.jl");
 include("src/metaweb.jl");   using .MetaWeb
 include("src/niches.jl");    using .Niches
 include("src/bam.jl");       using .BAM
