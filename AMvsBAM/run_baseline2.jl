@@ -33,7 +33,7 @@ Cs     = range(0.001, 0.10; length=16)
 Sigmas = range(0.02, 0.30; length=16)
 
 # climate grid
-grid_type = "gradient"   # try "gradient" or "fractal" too
+grid_type = "ridge"   # try "gradient" or "fractal" too
 Cgrid = Climate.make_climate_grid(nx, ny; kind=Symbol(grid_type), seed=11)
 
 # ---------------------------
