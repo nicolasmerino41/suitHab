@@ -4,7 +4,7 @@ export trophic_levels, trophic_incoherence
 
 using LinearAlgebra, Statistics
 
-function trophic_levels(A::Matrix{Int})
+function trophic_levels(A::Matrix)
     S = size(A,1)
     kin = sum(A, dims=2)
     v = [max(kin[i],1) for i in 1:S]
