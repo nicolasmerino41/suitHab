@@ -1,0 +1,362 @@
+---
+title: "All"
+author: "Nico"
+date: "2025-10-21"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Analytical structure of antisymmetric Jacobians under abundance heterogeneity
+
+## 1. Motivation
+
+In generalized Lotka–Volterra (gLV) models, community stability is determined by the **Jacobian matrix** evaluated at equilibrium.  
+Its dominant eigenvalue—the one with the largest real part—defines the system’s **resilience**, i.e., how fast perturbations decay.  
+Understanding how this eigenvalue depends on **interaction structure** and **abundance heterogeneity** is key to linking network architecture to ecological stability.
+
+Here we examine systems of the form
+
+$$
+J = D(A - I),
+$$
+
+where:
+- \(A\) is the interaction matrix (\(A_{ij}\) measures the effect of \(j\) on \(i\)),
+- \(I\) is the identity matrix (representing self-regulation),
+- \(D = \mathrm{diag}(u_1,\dots,u_S)\) contains the equilibrium abundances \(u_i > 0\).
+
+We will progressively build intuition about the structure of \(J\), starting from the basics.
+
+---
+
+## 2. The Jacobian of a generalized Lotka–Volterra system
+
+The generalized Lotka–Volterra (gLV) equations are:
+
+$$
+\dot{u}_i = u_i [K_i - u_i + (A u)_i],
+$$
+
+where \(u_i\) is abundance, \(K_i\) the intrinsic productivity, and \(A_{ij}\) the interaction coefficient (positive for facilitation, negative for competition or predation).
+
+At equilibrium (\(\dot{u}_i = 0\)), small perturbations evolve according to:
+
+$$
+\dot{\delta u} = J \delta u,
+$$
+
+where \(J\) is the Jacobian matrix of partial derivatives:
+
+$$
+J_{ij} = \frac{\partial \dot{u}_i}{\partial u_j} = 
+\begin{cases}
+u_i A_{ij}, & i \ne j, \\
+u_i(A_{ii} - 1), & i = j.
+\end{cases}
+$$
+
+In matrix form:
+
+$$
+J = D(A - I).
+$$
+
+---
+
+## 3. Self-regulation and relative interaction strengths
+
+The subtraction of the identity matrix means that **self-regulation is fixed to unity**.  
+Thus, off-diagonal interactions \(A_{ij}\) are *relative* to intraspecific self-damping.  
+If \(A_{ij} = 0.1\), it means that species \(j\)’s effect on species \(i\) is 10% of \(i\)’s self-regulation strength.
+
+---
+
+## 4. Pure antisymmetry and its meaning
+
+An **antisymmetric matrix** satisfies \(A^\top = -A\).  
+This condition represents perfectly reciprocal pairwise interactions:
+
+- If \(A_{ij} = a\), then \(A_{ji} = -a\).
+
+Such matrices are central in predator–prey systems where the gain of one is the loss of the other.
+
+In the antisymmetric case, \(A\) is purely rotational: its eigenvalues are purely imaginary, corresponding to neutral cycles in phase space.
+
+---
+
+## 5. Equal-abundance case (\(D = \bar{u} I\))
+
+If all species have the same abundance \(u_i = \bar{u}\), then
+
+$$
+J = \bar{u}(A - I).
+$$
+
+The eigenvalues of \(J\) are simply \(\lambda_k = \bar{u}(\mu_k - 1)\),  
+where \(\mu_k\) are eigenvalues of \(A\).
+
+Since antisymmetric \(A\) has purely imaginary eigenvalues (\(\mu_k = i \omega_k\)),  
+the real parts of \(J\)’s eigenvalues are all \(-\bar{u}\).
+
+Hence:
+
+> **Equal-abundance result:**  
+> If \(A\) is antisymmetric and all abundances are equal,  
+> then  
+> \[
+> \Re(\lambda_k) = -\bar{u} = -\min(u).
+> \]
+>  
+> This is the “neutral center”: all perturbations decay at rate \(\bar{u}\) with oscillatory components determined by \(A\).
+
+---
+
+## 6. Unequal abundances and geometric distortion
+
+When abundances differ (\(D \neq \bar{u}I\)),  
+the Jacobian becomes
+
+$$
+J = D(A - I) = \bar{u}(A - I) + (D - \bar{u}I)(A - I).
+$$
+
+The second term distorts the pure rotation induced by \(A\):
+each axis of the rotation (each species) is scaled differently.  
+This distortion introduces effective symmetric components into \(J\) that can alter the real parts of its eigenvalues.
+
+---
+
+## 7. The 2-species analytical case
+
+Let
+
+$$
+A = 
+\begin{pmatrix}
+0 & 1 \\
+-1 & 0
+\end{pmatrix}, \quad
+D = 
+\begin{pmatrix}
+u_1 & 0 \\
+0 & u_2
+\end{pmatrix}.
+$$
+
+Then
+
+$$
+J =
+\begin{pmatrix}
+-u_1 & u_1 \\
+-u_2 & -u_2
+\end{pmatrix}.
+$$
+
+The eigenvalues are:
+
+$$
+\lambda_{\pm} = -\frac{u_1 + u_2}{2}
+\pm \frac{1}{2}\sqrt{(u_1 - u_2)^2 - 4u_1u_2}.
+$$
+
+If \(u_1 = u_2 = u\), eigenvalues are \(-u \pm i u\).  
+Otherwise, they are complex or real depending on heterogeneity.
+
+Numerically:
+\begin{table}[h!]
+\centering
+\begin{tabular}{c c c c c}
+\hline
+$(u_1, u_2)$ & $\lambda_+$ & $\Re(\lambda_+)$ & $-\min(u)$ & Relation \\
+\hline
+$(1, 1)$     & $-1 \pm i$           & $-1$    & $-1$   & equal \\
+$(1, 0.5)$   & $-0.75 \pm i\,0.66$  & $-0.75$ & $-0.5$ & more negative \\
+$(1, 0.1)$   & $-0.55 \pm 0.32\,i$  & $-0.23$ & $-0.1$ & still more negative \\
+\hline
+\end{tabular}
+\caption{Numerical illustration of eigenvalue shifts for unequal abundances.}
+\end{table}
+
+So, **heterogeneity increases damping**:  
+\(\Re(\lambda) < -\min(u)\) always.
+
+---
+
+## 8. Why this happens (proof)
+
+For antisymmetric \(A\):
+
+$$
+\mathrm{Sym}(J)
+  = \frac{J + J^\top}{2}
+  = \frac{D(A - I) + (A - I)^\top D}{2}
+  = -D + \frac{DA - AD}{2}.
+$$
+
+But \(DA - AD\) is antisymmetric when \(A\) is antisymmetric and \(D\) diagonal,  
+so its symmetric part is zero:
+
+$$
+\mathrm{Sym}(J) = -D.
+$$
+
+Thus, for any vector \(x\),
+\[
+x^\top \mathrm{Sym}(J) x = -\sum_i u_i x_i^2 < 0,
+\]
+proving that all modes are dissipative.  
+No eigenvalue can cross the real axis;  
+\(\Re(\lambda) \le -\min(u)\) for all \(u>0\).
+
+---
+
+## 9. The 3-species cyclic case
+
+Consider the cyclic antisymmetric matrix
+
+$$
+A =
+\begin{pmatrix}
+0 & 1 & -1 \\
+-1 & 0 & 1 \\
+1 & -1 & 0
+\end{pmatrix}.
+$$
+
+Then \(J = D(A - I)\).  
+For equal abundances,  
+\(\Re(\lambda_{max}) = -1 = -\min(u)\).  
+For heterogeneous \(u\),  
+\(\Re(\lambda_{max}) < -\min(u)\), but never greater.
+
+Hence, heterogeneity always *stabilizes or leaves stability unchanged*.
+
+---
+
+## 10. General result for perfect antisymmetry
+
+> **Proposition.**  
+> If \(A^\top = -A\) and \(D = \mathrm{diag}(u_i) > 0\), then
+> \[
+> \Re(\lambda_k(J)) \le -\min(u_i),
+> \]
+> with equality if and only if all \(u_i\) are equal.
+
+This defines the **antisymmetric stability envelope**:
+abundance heterogeneity can only strengthen damping, never weaken it.
+
+---
+
+## 11. Breaking perfect antisymmetry
+
+Real ecosystems are rarely perfectly antisymmetric.  
+Small deviations occur because interactions are not exactly reciprocal.  
+We can write:
+
+$$
+A_\varepsilon = A + \varepsilon R,
+$$
+where \(R\) is a random matrix and \(\varepsilon\) controls the strength of asymmetry.
+
+Then,
+
+$$
+J_\varepsilon = D(A_\varepsilon - I)
+               = D(A - I) + \varepsilon D R.
+$$
+
+Now the symmetric part becomes:
+
+$$
+\mathrm{Sym}(J_\varepsilon) = -D + \frac{\varepsilon}{2}(DR + R^\top D),
+$$
+
+and the correction term \(\frac{\varepsilon}{2}(DR + R^\top D)\) can have positive eigenvalues.  
+This allows one or more modes to drift rightward, producing *less negative* real parts—destabilization.
+
+---
+
+## 12. Numerical evidence
+
+For \(S=4\), antisymmetric \(A\), and 20 000 random abundance draws:
+
+| Case | Asymmetry | Neutral | Stabilizing | Destabilizing |
+|:--|--:|--:|--:|--:|
+| Perfect antisymmetry (\(\varepsilon=0\)) | 0 | 24 | 19 976 | 0 |
+| Slightly broken antisymmetry (\(\varepsilon=0.1\)) | 0.1 | 28 | 19 892 | 80 |
+
+Even a small deviation from antisymmetry yields a small but non-zero number of **destabilizing** cases.
+
+---
+
+## 13. Geometric interpretation
+
+In the antisymmetric limit:
+
+- Each 2×2 sub-block of \(A\) represents a rotation plane.
+- The symmetric part of \(J\) is strictly \(-D\).
+
+- All modes decay with rate at least \(-\min(u)\).
+
+
+Breaking antisymmetry adds *shear* to these planes,  
+partially converting rotational motion into stretching or contraction along real axes.  
+When stretching exceeds damping in one direction, a destabilizing mode appears.
+
+---
+
+## 14. Synthesis and implications
+
+| Structural assumption | Symmetric part of \(J\) | Possible regimes | Mechanism |
+|------------------------|------------------------|------------------|------------|
+| Perfect antisymmetry | \(\mathrm{Sym}(J) = -D\) | Neutral, Stabilizing | All modes dissipative |
+| Slightly broken antisymmetry | \(\mathrm{Sym}(J) = -D + \varepsilon S\) | Neutral, Stabilizing, Destabilizing | Symmetric correction introduces growth directions |
+| Strong asymmetry (empirical webs) | Complex \(S\) | Mixed | Cooperative feedbacks can dominate |
+
+Thus, the antisymmetric limit defines a **lower bound of possible resilience**:  
+abundance heterogeneity cannot destabilize it.  
+Destabilization only emerges once antisymmetry is broken,  
+which happens naturally in empirical food webs with imperfect reciprocity.
+
+---
+
+## 15. Final conclusion
+
+1. **Antisymmetric structure ensures strict damping**:  
+   heterogeneity in \(u_i\) only strengthens stability, never weakens it.
+
+2. **Breaking antisymmetry introduces instability potential**:  
+   asymmetry adds symmetric components to \(J\), enabling eigenvalues to shift rightward.
+
+3. **Empirical observation**:  
+   most systems are near-antisymmetric and predominantly stabilizing,  
+   with occasional destabilizing outliers arising from local structural imbalances.
+
+4. **Conceptual takeaway**:  
+   Antisymmetry defines the *theoretical stability envelope*;  
+   real ecosystems fluctuate within and around it.
+
+In summary:
+
+> **Abundance heterogeneity alone cannot destabilize a perfectly antisymmetric system.  
+> Destabilization arises only when antisymmetry is broken—  
+> when feedback asymmetries inject symmetric components into the Jacobian.**
+

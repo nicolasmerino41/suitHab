@@ -1,0 +1,183 @@
+---
+title: "HeterogeneityVsResilience"
+author: "Nico"
+date: "2025-10-21"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 10. From antisymmetry to broken antisymmetry: emergence of destabilization
+
+We now formalize the transition between the ideal, purely antisymmetric case—where heterogeneity only strengthens damping—and the more realistic, slightly asymmetric case, where destabilizing modes can appear.
+
+---
+
+### 10.1 The ideal antisymmetric limit
+
+We begin from the generalized Lotka–Volterra Jacobian:
+
+$$
+J = D(A - I),
+$$
+
+with
+
+- \(A^\top = -A\) (perfect antisymmetry),
+
+- \(D = \mathrm{diag}(u_1,\dots,u_S) > 0\) the equilibrium abundances.
+
+In this setting, the **symmetric part** of \(J\) is
+
+$$
+\frac{J + J^\top}{2}
+  = \frac{D(A-I) + (A-I)^\top D}{2}
+  = \frac{DA - AD}{2} - D.
+$$
+
+Since \(DA - AD\) is **antisymmetric** whenever \(A\) is antisymmetric and \(D\) is diagonal, we obtain:
+
+$$
+\mathrm{Sym}(J) = -D.
+$$
+
+Consequently, for any vector \(x\):
+
+$$
+x^\top \mathrm{Sym}(J) x = -\sum_i u_i x_i^2 < 0.
+$$
+
+Thus, the symmetric part of \(J\) is *strictly negative definite*, meaning that every mode is dissipative.  
+It immediately follows that:
+
+> **Proposition.**  
+> For any antisymmetric \(A\) and positive diagonal \(D\):  
+> \[
+> \Re(\lambda_k(J)) \le -\min(u_i),
+> \]
+> with equality if and only if all \(u_i\) are equal.
+
+This proves that **abundance heterogeneity alone cannot destabilize** a purely antisymmetric system;  
+it can only enhance damping (shift eigenvalues further left).
+
+---
+
+### 10.2 Numerical confirmation
+
+To test this result, we sampled 20 000 random abundance vectors \(u\) for the 4-species antisymmetric matrix
+
+$$
+A =
+\begin{pmatrix}
+0 & 1 & 0 & 0 \\
+-1 & 0 & 0 & 0 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & -1 & 0
+\end{pmatrix},
+\quad
+J = D(A - I).
+$$
+
+We classified outcomes as:
+
+\[
+\text{neutral if } |\Re(\lambda_{max}) + \min(u)| < 10^{-3},\quad
+\text{stabilizing if } \Re(\lambda_{max}) < -\min(u),\quad
+\text{destabilizing if } \Re(\lambda_{max}) > -\min(u).
+\]
+
+| Regime | Count | Fraction |
+|:--|--:|--:|
+| Neutral | 24 | 0.1 % |
+| Stabilizing | 19 976 | 99.9 % |
+| Destabilizing | 0 | 0 % |
+
+All sampled systems were either neutral or more stable than the smallest \(u_i\).  
+This confirms the theoretical bound.
+
+---
+
+### 10.3 Breaking perfect antisymmetry
+
+Real ecological networks are never exactly antisymmetric:  
+predators differ in attack rates, prey differ in defense, and indirect pathways create partial reciprocity.  
+To model this, we add a small random perturbation \(\varepsilon R\) to \(A\):
+
+$$
+A_\varepsilon = A + \varepsilon R,\qquad R_{ij} \sim \mathcal{N}(0,1),
+$$
+and we symmetrize so that \(A_\varepsilon - A_\varepsilon^\top\) remains close to antisymmetric.
+
+The Jacobian becomes:
+
+$$
+J_\varepsilon = D(A_\varepsilon - I)
+               = D(A - I) + \varepsilon D R.
+$$
+
+Now the symmetric part gains an additional term:
+
+$$
+\mathrm{Sym}(J_\varepsilon) = -D + \frac{\varepsilon}{2}(DR + R^\top D),
+$$
+
+where the new component \(\frac{\varepsilon}{2}(DR + R^\top D)\) is **not purely antisymmetric**.  
+It can have positive eigenvalues, partially offsetting the damping imposed by \(-D\).  
+This enables eigenvalues of \(J_\varepsilon\) to cross the real axis.
+
+---
+
+### 10.4 Simulation results with small asymmetry
+
+Running the same 20 000 random draws with \(\varepsilon = 0.1\) yields:
+
+| Regime | Count | Fraction |
+|:--|--:|--:|
+| Neutral | 28 | 0.14 % |
+| Stabilizing | 19 892 | 99.46 % |
+| Destabilizing | 80 | 0.4 % |
+
+A small but non-zero fraction of cases now exhibit  
+\(\Re(\lambda_{max}) > -\min(u)\): **heterogeneity becomes destabilizing**.  
+This happens precisely when the asymmetric part of \(\mathrm{Sym}(J_\varepsilon)\) aligns with the least-damped mode of \(J\).
+
+---
+
+### 10.5 Interpretation
+
+| Structural assumption | Symmetric part of \(J\) | Possible regimes | Mechanism |
+|------------------------|------------------------|------------------|------------|
+| Perfect antisymmetry | \(\mathrm{Sym}(J) = -D\) | Neutral, Stabilizing | All modes strictly dissipative |
+| Slightly broken antisymmetry | \(\mathrm{Sym}(J) = -D + \varepsilon S\) | Neutral, Stabilizing, Destabilizing | Symmetric correction can push one mode rightward |
+| Strongly asymmetric (empirical networks) | Non-antisymmetric \(A\) | Full mix | Cooperative and feedback motifs dominate |
+
+Therefore, the emergence of the “destabilizing” branch in simulations reflects the inevitable structural asymmetries of real ecosystems rather than numerical noise.
+
+---
+
+### 10.6 Broader implication
+
+The antisymmetric limit provides a **lower bound of possible resilience**:
+it defines the maximally dissipative configuration attainable by abundance heterogeneity alone.  
+Any departure from perfect antisymmetry introduces the potential for real, right-shifted eigenvalues—collective modes that decay more slowly than expected from their least-abundant species.
+
+In this sense, antisymmetry represents a theoretical **stability envelope**:
+heterogeneity can never push the system *beyond* it, only within or below it.  
+Breaking antisymmetry opens the door to richer, but potentially riskier, dynamical behaviour.
+

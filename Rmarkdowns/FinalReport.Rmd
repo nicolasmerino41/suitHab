@@ -1,0 +1,150 @@
+---
+title: "Final Report"
+author: "Nico, Núria & Jeff"
+date: "2025-11-03"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Scope and objects.** We study how simplifying transformations of the Jacobian \(J\) affect the predictability of four diagnostics: resilience \( \mathrm{res} \), reactivity \( \mathrm{rea} \), and the median return rate \( \tilde r_{\mathrm{med}}(t) \) at short and long horizons. Predictability is assessed by the coefficient of determination to the identity line (step vs full), i.e. \(R^2\) for \(y=x\) across communities. We vary interaction strength (IS), abundance heterogeneity, degree heterogeneity, and trophic antisymmetry while applying six transformations (“steps”): reshuffling of off–diagonal interactions (**reshuf**), row–mean averaging (**row**), thresholding the weakest links (**thr**), removing the rarest species (**rarer**), reshuffling abundances (**ushuf**, used in place of uniformization), and rewiring to a structure–free trophic ensemble (**rew**).
+
+**Core objects and metrics.** Communities are summarized by their equilibrium abundances \(u\in\mathbb{R}^S_{>0}\) and an interaction matrix \(A\) (off–diagonal) with trophic antisymmetry at the pair level. The Jacobian is
+\[
+J \;=\; \mathrm{Diag}(u)\,(A - I),
+\]
+so that diagonal entries are \(-u_i\) and off–diagonal entries are \(u_i\,\alpha_{ij}\) with \( \alpha_{ij} = J_{ij}/u_i \). We use:
+\[
+\mathrm{res}(J) \equiv \lambda_{\max}(J),\qquad
+\mathrm{rea}(J) \equiv \lambda_{\max}\!\left(\frac{J+J^{\!\top}}{2}\right).
+\]
+Following Arnoldi et al. (2018), the median return rate at time \(t>0\) is
+\[
+\tilde r_{\mathrm{med}}(t)
+\,=\, -\frac{1}{2t}\left[\log \operatorname{tr}\!\left(e^{tJ}\,C\,e^{tJ^{\!\top}}\right) - \log \operatorname{tr}(C)\right],
+\]
+with a perturbation covariance \(C\). We use two regimes:
+
+- **Biomass–weighted**: \( C=\mathrm{Diag}(u^2) \). Then rows with large \(u_i\) dominate \( \tilde r_{\mathrm{med}}(t) \) at small \(t\).
+
+- **Uniform**: \( C \propto I \). All rows contribute equally, decoupling \( \tilde r_{\mathrm{med}}(t) \) from \(u\).
+
+For very long times,
+\[
+\lim_{t\to\infty} \tilde r_{\mathrm{med}}(t) \;=\; -\,\lambda_{\max}(J)\,,
+\]
+so \( \tilde r_{\mathrm{med}}(t) \) converges to resilience (modulo finite–time transients).
+
+**Predictability definition.** For any metric \(m\) and step \(s\), predictability is \(R^2\) to the identity:
+\[
+R^2_{\text{id}}(m^{(s)}, m^{\mathrm{full}}) \;=\; 1 - \frac{\sum_k\left(m_k^{(s)} - m_k^{\mathrm{full}}\right)^2}{\sum_k\left(m_k^{\mathrm{full}} - \overline{m^{\mathrm{full}}}\right)^2}\,,
+\]
+which is stricter than squared Pearson correlation because it penalizes slope \(\neq 1\) and nonzero intercept.
+
+**Simplification steps (conceptual).**
+
+- **reshuf**: variance–preserving permutation of off–diagonal \(\alpha_{ij}\) (pairwise where relevant), conserving marginal distributions but scrambling who interacts with whom.
+
+- **row**: replace each nonzero \(\alpha_{ij}\) within row \(i\) by \( \operatorname{sign}(\alpha_{ij}) \times \mathrm{mean}_j|\alpha_{ij}| \); preserves row totals of interaction magnitude while erasing within–row heterogeneity.
+
+- **thr**: remove the weakest \(q\)–quantile of \(|\alpha_{ij}|\); tests sensitivity to the tail of weak links.
+
+- **rarer**: set the rarest \(p\) fraction of species to zero abundance (they drop out of \(J\) via zero rows/columns after reconstruction); targets the low–\(u\) tail.
+
+- **ushuf**: permute entries of \(u\) (same mean/variance; destroys alignment between row weights and row content while preserving the distribution of abundances).
+
+- **rew**: redraw a structure–free trophic network at the same connectance and IS (pair antisymmetry retained in signs), testing dependence on topology beyond marginal statistics.
+
+**Time–scale logic for \( \tilde r_{\mathrm{med}}(t) \) (biomass case).** For \(t\to 0^+\), a second–order expansion of \(e^{tJ}\) and the trace shows the leading term in \(\tilde r_{\mathrm{med}}(t)\) weights rows by \(u_i^2\). Intuitively, the fastest instantaneous contraction/expansion is controlled by those rows with the largest \(u_i\): their diagonals \(-u_i\) dominate early–time behavior and their outgoing fluxes scale like \(u_i\,\alpha_{ij}\). As \(t\) increases, cross–row pathways and spectral geometry of \(J\) (eigenvalues/eigenvectors) take over, and the metric tends to \(-\lambda_{\max}(J)\).
+
+**Expectations across steps and time.**
+
+- **Very short time** \(t\) (instantaneous regime). With biomass perturbations, rows with large \(u_i\) dominate.  
+  
+  • **rarer** with small \(p\): negligible effect unless the culling reaches large–\(u\) species (hence flat \(R^2\) vs \(p\) in many cases).  
+  
+  • **ushuf/uni** (abundance homogenization or misalignment): strong loss of predictability when \( \mathrm{CV}(u) \) is high, because redistributing/removing weight from dominant rows alters the early trace.  
+  
+  • **thr/row/reshuf**: modest impact unless they alter the strong interactions attached to large–\(u\) rows.  
+  
+  • **rew**: variable; more disruptive when IS is high or antisymmetry/topological blocks carry coherent flow that is broken by random rewiring.
+
+- **Intermediate time**: Interaction pathways accumulate; changes that alter mesoscale structure (**reshuf, row, thr, rew**) increasingly matter for \( \tilde r_{\mathrm{med}}(t) \). **rarer** begins to matter when removed species mediate key chains or when culling affects mid/large \(u\).
+
+- **Long time** \(t\): \( \tilde r_{\mathrm{med}}(t) \to -\lambda_{\max}(J) \). Predictions align with resilience. Steps that move the spectral abscissa (e.g., removing stabilizing weak links vs destabilizing strong ones, changing degree/flow organization) determine the asymptote.
+
+**Uniform vs biomass perturbations (qualitative shifts).** Switching to \(C\propto I\) removes the \(u_i^2\) weighting. Expected qualitative changes:  
+
+• **rarer** becomes impactful even at small \(t\) (small–\(u\) rows no longer negligible).  
+
+• **ushuf/uni** looks less harmful at small \(t\) (flattening/reshuffling \(u\) is closer to the measurement).  
+• Structure–altering steps (**reshuf/thr/row/rew**) appear more influential at small \(t\) because row weights no longer suppress low–\(u\) rows.  
+• Long–time alignment with resilience remains.
+
+**Interaction strength (IS) and antisymmetry.** Increasing IS amplifies the contribution of off–diagonal terms \(u_i\alpha_{ij}\), so structure–altering steps lose predictability sooner with IS. Pairwise antisymmetry governs cancellation in \(J+J^\top\) and the coupling of reciprocal magnitudes; breaking it (by severe reshuffle/rewire) degrades predictability of \(\mathrm{rea}\) and the mid–time \( \tilde r_{\mathrm{med}}(t) \) more strongly than when antisymmetry is preserved.
+
+**Abundance and degree heterogeneity.**
+
+• High \( \mathrm{CV}(u) \) concentrates early–time dynamics on a few rows, making **ushuf/uni** highly consequential for short–time \( \tilde r_{\mathrm{med}}(t) \); **rarer** is negligible until \(p\) reaches those rows.  
+
+• Degree heterogeneity matters most through spectral geometry (hub formation, pathway length and weight alignment), thus it primarily affects \(\mathrm{res}\), \(\mathrm{rea}\), and long–time \( \tilde r_{\mathrm{med}}(t) \).  
+
+• When degree heterogeneity and abundance heterogeneity co–align (large–\(u\) nodes also highly connected), both short– and mid–time predictability become sensitive to steps that disrupt that alignment (e.g., **reshuf**, **rew**, strong **thr**).
+
+**Weak–link vs rare–species manipulations.**  
+
+- **thr(q)** primarily trims low–flow interactions. Expect a soft threshold in predictability: small \(q\) scarcely changes \(\mathrm{res}\) or long–time \( \tilde r_{\mathrm{med}} \); larger \(q\) eventually removes stabilizing structure or key connectors, reducing \(R^2\).  
+
+- **rarer(p)** leaves short–time \( \tilde r_{\mathrm{med}} \) nearly unchanged under biomass perturbations unless removed species include large–\(u\) rows; its impact grows with \(t\) and with the extent to which removed species mediate flow.
+
+**Why very short \(t\) can show negative \( \tilde r_{\mathrm{med}} \).** The definition is a log–ratio of norms of \(e^{tJ}\)–propagated perturbations; when contraction dominates, \( \tilde r_{\mathrm{med}}(t) \) is positive, but transient directions aligned with expanding modes or cross–terms in \(e^{tJ}\) can produce local values that are lower (or even negative) before the asymptotic regime emerges. The sign does not contradict the long–time limit \( \tilde r_{\mathrm{med}}(t)\to -\lambda_{\max}(J) \).
+
+**Putting it together (qualitative map).**  
+
+1. **Short \(t\), biomass**: \( \tilde r_{\mathrm{med}} \) is controlled by large \(u_i\). Predictability is robust to **rarer(p\small)**; highly sensitive to **ushuf/uni** when \( \mathrm{CV}(u) \) is large; mildly sensitive to **thr/row/reshuf** unless strong links attached to large–\(u\) rows are affected.  
+
+2. **Mid \(t\)**: sensitivity migrates toward interaction organization; predictability declines first for **reshuf/row/thr/rew** at higher IS or when antisymmetry is disrupted.  
+
+3. **Long \(t\)**: \( \tilde r_{\mathrm{med}}\approx \) resilience; steps that shift the spectral abscissa dominate outcomes.  
+
+4. **Uniform perturbations**: invert many short–time intuitions—**rarer** matters early; **ushuf/uni** less so; structure steps appear more impactful at small \(t\).  
+
+5. **Heterogeneity**: \( \mathrm{CV}(u) \) governs early–time weighting; degree heterogeneity governs spectral/topological effects manifesting in \(\mathrm{rea}\), \(\mathrm{res}\), and long–time \( \tilde r_{\mathrm{med}} \).
+
+**Operational guidance for interpreting figures.**  
+
+- Compare **step vs full** using \(R^2_{\text{id}}\). High values imply both slope near 1 and small intercept—true predictability, not just correlation.  
+
+- Read **time–curves** of \( \tilde r_{\mathrm{med}}(t) \) as a migration from abundance–weighted local contraction (small \(t\)) to global spectral control (large \(t\)).  
+
+- Use **IS–stratified lines** to see when structure becomes determinant.  
+
+- Use **heterogeneity sweeps** to separate abundance– vs degree–driven sensitivities.  
+
+- When switching from **biomass** to **uniform** perturbations, reinterpret short–time panels with the weighting change in mind.
+
+
+
+
+
+
+
+
+
+

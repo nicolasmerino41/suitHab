@@ -1,0 +1,143 @@
+---
+title: "Legacy Vs New Approach"
+author: "Nico"
+date: "2025-10-16"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Legacy vs New Community-Building Pipelines (GLV)
+
+This note compares the *legacy* and the *new* pipelines you use to build generalized Lotka–Volterra (gLV) communities, highlighting how \(A\), \(K\), and the equilibrium \(u^*\) are produced and validated.
+
+---
+
+## 1) Big picture
+
+* Legacy: Draw a topology \(A\) (simple ER/PL/MOD recipes). Then sample \(K\) until the *analytic equilibrium* \(u = (I - A)^{-1} K\) is positive and stable. If not, sample another \(K\). \(A\) is never rescaled. Consumers' \(K\) are fixed by convention (0.0 or 0.1). If nothing works after many attempts, skip the combo.
+
+* New: Build a richer bipartite topology \(A\) (degree-corrected, block-biased). Then choose a target equilibrium vector \(u\) you want. Derive \(K\) so that \(u\) is an *exact* equilibrium. If the Jacobian is not stable enough, shrink \(A\) uniformly (\(A \leftarrow \alpha A\), \(0 < \alpha < 1\)) until a margin is satisfied—re-deriving \(K\) consistently. No combos are skipped.
+
+Mental model:
+
+* Legacy = *search over* \(K\) to make the *given* \(A\) work.
+* New = *construct* \(K\) (and gently scale \(A\) if needed) so the *chosen* \(u\) works.
+
+---
+
+## 2) How the interaction matrix \(A\) is built
+
+### Legacy (simpler recipes)
+
+* Pick a scenario: `:ER`, `:PL`, or `:MOD`.
+* Activate consumer\(\to\)resource edges with probability or from degree recipes; draw magnitudes (e.g., Normal with scale IS).
+* Impose CR antisymmetry: if \(A_{i j} = +m\) (consumer \(i\) on resource \(j\)), then \(A_{j i} = -m\).
+* Realized degree CVs and modularity can drift from targets (looser control).
+
+### New (degree-corrected, block-biased bipartite)
+
+* Specify target connectance, degree CVs (consumer out-degree, resource in-degree), modularity, and number of blocks.
+* Sample integer degree sequences (with minima and specialist fractions), and wire via a configuration-style bipartite algorithm to match the targets.
+* Keep CR antisymmetry.
+* Realized structure (degrees, within-block edges) *closely* follows the targets.
+
+---
+
+## 3) How \(K\) and the equilibrium \(u^*\) are determined
+
+### Legacy: sample \(K\) \(\Rightarrow\) accept if \(u\) is good
+
+1. Sample \(K\) for resources (Normal/LogNormal); fix consumer \(K\) by convention (0.0 or 0.1).
+2. Solve analytically:
+   $$
+   u = (I - A)^{-1} K.
+   $$
+3. If any \(u_i \le 0\) or non-finite, reject and resample \(K\).
+4. Compute the Jacobian at \(u\):
+   $$
+   J = \mathrm{Diag}(u)\,(A - I).
+   $$
+   If \(\max\, \Re\, \lambda(J) \le 0\) (or \(\le -\text{margin}\) if required), accept; else resample \(K\).
+5. If all attempts fail, skip the combo.
+   \(A\) is never rescaled.
+
+### New: choose \(u\) \(\Rightarrow\) derive \(K\) \(\Rightarrow\) (maybe) shrink \(A\)
+
+1. Choose \(u\) (resources/consumers lognormal with your chosen CVs).
+2. Calibrate consumers so they respect the fixed \(K_{\text{cons}}\) convention:
+   enforce \((A u)_i = u_i - K_i\) for each consumer \(i\), by rescaling the consumer\(\to\)resource row and mirroring signs (preserves CR antisymmetry).
+3. Derive resource \(K\) from the equilibrium condition for \(j \le R\):
+   $$
+   K_j = u_j - (A u)*j, \quad (\text{and } K_i = K*{\text{cons}} \text{ for consumers}).
+   $$
+   This makes \(u\) an exact fixed point of \(\dot u = u \odot (K - u + A u)\).
+4. Stabilize if needed: if
+   $$
+   \max\, \Re\, \lambda\big(\mathrm{Diag}(u)(A - I)\big) > -\text{margin},
+   $$
+   shrink \(A \leftarrow \alpha A\), \(\alpha \in (0,1)\), and re-derive \(K\) with the same consumer rule so \(u\) remains the equilibrium. Iterate until the margin holds.
+
+Key difference: Legacy *searches* over \(K\) and may reject combos; New *constructs* \(K\) for the chosen \(u\) and never rejects, but may shrink \(A\).
+
+---
+
+## 4) What “shrink \(A\)” means and why it affects realized IS
+
+* Operation: \(A \leftarrow \alpha A\) uniformly (same \(\alpha\) for all off-diagonals), repeated until the stability margin is met.
+* Effect on spectrum: reduces \(\|A\|\), increases diagonal dominance of \(J\), shifts eigenvalues left.
+* Realized interaction strength (mean \(|A_{ij}|\) over active edges) becomes \(\alpha\) times the generator’s level.
+* We record \(\alpha\) (e.g., `alpha_full`); \(\alpha = 1\) means no shrink needed.
+
+---
+
+## 5) How “steps” are evaluated
+
+* In both pipelines, a step builds a modified \(A_s\) (row-mean, role-mean, global-mean, rewiring, conn/IS changes, role reassignment, ...), then keeps \(K\) fixed unless the step explicitly changes roles (then consumers’ \(K\) follow the convention).
+
+* Legacy steps: compute the analytic \(u_s = (I - A_s)^{-1} K\). If infeasible/unstable, skip metrics for that step. No shrink at steps.
+
+* New steps: compute \(u_s\) analytically *or* settle with a short ODE if \(I - A_s\) is ill-conditioned. No shrink at steps (by design, this tests sensitivity under “less information”).
+
+Metrics in both: resilience from \(J_s\), reactivity from the symmetric part of \(J_s\), press/pulse return times with extinction callbacks, species-level quantities, etc.
+
+---
+
+## 6) Practical consequences you observe
+
+* Legacy acceptance bias: Because you *reject* many \((A,K)\) draws, the accepted set tends to be those \(K\) that make the whole ladder “work” more often—this can inflate across-step correlations even under harsh modifications.
+
+* New pipeline sensitivity: By fixing \(u\), deriving \(K\), and allowing \(A\) to shrink only at baseline, you keep all structural regimes (including ones where mild averaging strongly perturbs \(J\)). With richer, controlled heterogeneity (degree CVs, blocks, specialist fractions), smoothing/averaging steps can materially change \(J\), so resilience/reactivity correlations can drop—exactly what you’re seeing.
+
+---
+
+## 7) If you want the new code to behave like the legacy approach
+
+1. Don’t fix \(u\) first; instead sample \(K\) (resources Normal/LogNormal, consumers fixed).
+2. Do not shrink \(A\); if \(u\) is infeasible/unstable, skip the combo.
+3. Use the simple \(A\) generators if you want the same topology bias.
+4. At steps, keep \(K\) fixed and use analytic \(u_s = (I - A_s)^{-1} K\), skipping if infeasible/unstable.
+
+---
+
+## 8) TL;DR
+
+* Legacy: *Search over* \(K\) for a given \(A\) until \(u\) is positive and stable; never rescale \(A\). Skips hard cases \(\Rightarrow\) potential correlation inflation.
+* New: *Choose* \(u\), derive \(K\) so \(u\) is exact; shrink \(A\) uniformly only to meet a margin. Richer structure \(\Rightarrow\) averaging steps more clearly reveal sensitivity, often lowering cross-step alignment of resilience/reactivity.
+

@@ -1,0 +1,246 @@
+---
+title: "Final Report"
+author: "Nico, Núria & Jeff"
+date: "2025-11-03"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# THE THREE STRUCTURAL BRANCHES
+We analyze predictability of community dynamics by separating structure into three branches: 
+
+1. **Time scales**, given by the Jacobian diagonal \(J_{ii}=-u_i\).
+
+2. The **distribution of interaction strengths**, encoded by off-diagonal entries \(J_{ij}\) (or rescaled coefficients \(\alpha_{ij}=J_{ij}/u_i\)), which controls how strongly species interact with one another.
+
+3. The **topology** (who interacts with whom), i.e., the adjacency pattern, degree heterogeneity, and antisymmetry across pairs. 
+
+By varying each branch while holding the others fixed, we can attribute changes in the predictability of dynamical properties to time-scale heterogeneity, to the spread of \(|J_{ij}|\) (or \(|\alpha_{ij}|\)), or to the wiring architecture itself.
+
+# MODIFICATION STEPS
+
+**Related to time-scales**
+Let \(J=\mathrm{Diag}(u)\,(A-I)\) and \(\alpha_{ij}=J_{ij}/u_i\) for \(i\neq j\).
+
+- **ushuf (abundance reshuffle).** Permute entries of \(u\) to \(\tilde u\); build \(\tilde J=\mathrm{Diag}(\tilde u)\,(A-I)\). Only time scales are reassigned across species.
+
+- **rarer (remove rarest 20%).** Set the lowest \(20\%\) of \(u_i\) to zero and drop those species; build \(J\) on the remaining subcommunity (same \(\alpha\) among survivors).
+
+**Related to the distribution of Interaction Strenghts**
+
+- **row (row-mean \(\alpha\)).** For each \(i\), replace nonzero \(\alpha_{ij}\) by \(\operatorname{sign}(\alpha_{ij})\cdot \overline{|\alpha_{i\cdot}|}\) (mean absolute value within row \(i\)); topology unchanged.
+
+- **reshuf (pairwise-preserving shuffle).** Treat each unordered pair \((i,j)\) as a block and permute \((\alpha_{ij},\alpha_{ji})\) across pair locations; preserves pair magnitudes/signs, changes who-interacts-with-whom.
+
+**Related to the topology of the network**
+
+- **thr (threshold weakest 20%).** Set \(\alpha_{ij}=0\) for the lowest \(20\%\) of \(|\alpha_{ij}|\); keep all other entries unchanged.
+
+- **rew (random rewiring, ER trophic).** Redraw a new trophic network at the same connectance and realized mean \(|A|\) (Erdos–Rényi style), preserving trophic sign convention; build \(J\) with the original \(u\).
+
+# MEDIAN RETURN RATE \(\tilde r(t)\)
+
+We quantify how fast a community relaxes after a small pulse by the *median return rate* at time \(t\), defined from the linearized dynamics \(\dot x = J x\). Let \(C\) encode the covariance (direction/weighting) of the pulse. The expected perturbation energy at time \(t\) is
+$$
+Q(t) = \operatorname{tr}\!\big( e^{tJ}\, C \, e^{tJ^{\!\top}} \big).
+$$
+The median return rate is then
+$$
+\tilde r(t) \,=\, -\frac{1}{2t}\,\Big[\log Q(t) - \log Q(0)\Big],
+\qquad Q(0)=\operatorname{tr}(C).
+$$
+
+**Interpretation**
+
+* \(\tilde r(t)\) is the average exponential *decay* rate of perturbation energy between time \(0\) and \(t\) under the chosen weighting \(C\). Larger \(\tilde r(t)\) means faster recovery.
+
+**Relation to reactivity (very short time)**
+Using the short-time expansion \(e^{tJ} = I + tJ + \mathcal{O}(t^2)\),
+$$
+\tilde r(t) \,=\, -\tfrac{1}{2}\,\frac{\operatorname{tr}\big((J{+}J^{\!\top})\,C\big)}{\operatorname{tr}(C)} \, + \, \mathcal{O}(t),
+$$
+so as \(t\to 0^+\), \(\tilde r(t)\) is governed by the symmetric part \(H = \tfrac{1}{2}(J{+}J^{\!\top})\). Its upper envelope coincides with *reactivity* (the maximum instantaneous growth rate), hence \(\tilde r(t)\) at tiny \(t\) is a reactivity-like, short-term rate.
+
+**Relation to resilience (very long time)**
+Spectral dominance of the slowest mode yields
+$$
+\lim_{t\to\infty} \tilde r(t) \,=\, -\max_i \Re\,\lambda_i(J) \,=\, -\lambda_{\max}(J),
+$$
+i.e., the long-time limit equals *resilience* (negative of the leading eigenvalue’s real part).
+
+**Two perturbation weightings (choice of \(C\))**
+
+* *Uniform:* \(C = \sigma^2 I\). All species are equally likely/dominant in the pulse; \(Q(0) \propto S\).
+* *Biomass-weighted:* \(C = \operatorname{diag}(u_1^2,\dots,u_S^2)\). Pulses scale with standing biomass; large-\(u_i\) species weigh more in \(Q(t)\).
+
+These two cases bracket different ecological questions: the *uniform* choice probes structure-driven dynamics independent of abundances, whereas the *biomass* choice makes \(\tilde r(t)\) sensitive to the time-scale vector (the diagonal of \(J\)) via \(u\).
+
+# STRUCTURAL CONTINGENCIES
+**Understanding structural aspects that may impact the results**
+
+* **Degree heterogeneity.** Variability in how many trophic partners species have. We characterize it via the coefficient of variation of degrees (total, in, or out):
+$$
+\mathrm{CV}_{\text{deg}} = \frac{\mathrm{sd}(k)}{\mathrm{mean}(k)}
+$$
+  where \(k\) is a degree vector (counts of links per species).
+
+* **Abundance heterogeneity.** Variability in equilibrium biomasses \(u\). We use
+$$
+\mathrm{CV}*u = \frac{\mathrm{sd}(u)}{\mathrm{mean}(u)}
+$$
+  which controls the spread of the diagonal time scales since \(J*{ii} = -u_i\).
+
+* **Average interaction strength (Avg IS).** Mean absolute off–diagonal magnitude of the community matrix (or equivalently of \(\alpha\) once scaled by \(u\)):
+$$
+\text{IS} = \frac{1}{S(S-1)} \sum_{i\ne j} \big|A_{ij}\big| \quad \text{(or } \frac{1}{S(S-1)}\sum_{i\ne j} |\alpha_{ij}|\text{)}.
+$$
+
+* **Correlation between time scales and interaction distribution.** Statistical association between species’ intrinsic time scales and how strongly they interact. With \(u_i\) setting time scales via \(J_{ii}=-u_i\) and \(m_i\) summarizing a species’ incident interaction magnitude (e.g., row/column sums of \(|\alpha_{ij}|\)), we quantify
+$$
+  \mathrm{Corr}(u, m) = \mathrm{corr}\Big(\{u_i\}*{i=1}^S,\;\{m_i\}*{i=1}^S\Big)
+$$
+  where \(m_i\) can be chosen as \(\sum_{j\ne i}|\alpha_{ij}|\) (outgoing), \(\sum_{j\ne i}|\alpha_{ji}|\) (incoming), or their sum.
+  
+* **Level of antisymmetry and whether modifications preserve it**
+
+  - **Pairwise antisymmetry (trophic sign structure).** For each unordered pair \(\{i,j\}\), the off–diagonal entries satisfy opposite signs, i.e. \(\operatorname{sign}(A_{ij}) = -\operatorname{sign}(A_{ji})\). We summarize magnitude coupling with
+$$
+\rho \equiv \mathrm{corr}\big(|A_{ij}|,\,|A_{ji}|\big) \in [0,1]
+$$
+  where \(\rho=1\) means identical magnitudes per pair and \(\rho=0\) means uncorrelated magnitudes (signs remain opposite by construction).
+
+  - **Preserving antisymmetry under a modification.** A step *preserves* antisymmetry if for every active pair \(\{i,j\}\) it keeps opposite signs and retains the two directions as a bound pair (moved together). A step *breaks* antisymmetry if it treats \(i\to j\) and \(j\to i\) independently.
+  
+# Kinda FINAL RESULTS
+
+# ALL RESULTS
+
+### Abundance Heterogeneity
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/AbundanceDsitributions.jpg'
+)
+```
+
+### Degree Distributions
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/InOutDegrees.jpg'
+)
+```
+
+### Predictability of Rmed across t (weighted)
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/Predictablity_of_rmed_vs_t (Weighted).jpg'
+)
+```
+
+#### Per Interaction Strength
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/Predictablity_of_rmed_vs_t ProgressiveIS (Weighted).jpg'
+)
+```
+
+### Predictability of Rmed across t (non-weighted)
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/Predictablity_of_rmed_vs_t (nonWeighted).jpg'
+)
+```
+
+### Structural Contingencies
+
+#### Degree Heterogeneity
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/PredictabilityVSDegreeHeterogeneity.jpg'
+)
+```
+#### Abundance Heterogeneity
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/PredictabilityVSAbundanceHeterogeneity.jpg'
+)
+```
+#### Trophic Antisymmetry
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/LongRmedsVsAntiSymmetry.jpg'
+)
+```
+#### Correlation U Vs A
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/U_VS_A_correlations.jpg'
+)
+```
+#### Uni Rmed behaviour
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/Exhaustive_rmed_uniRarer_BIOMASS.jpg'
+)
+```
+
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/Exhaustive_rmed_uniRarer_UNIFORM.jpg'
+)
+```
+
+### Convergence of Resilience and long Rmed
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/Convergence of rmed to Res (altogether).jpg'
+)
+```
+
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/Convergence of rmed to Res (perStep).jpg'
+)
+```
+
+# ANNEX
+
+Why "larger \(\tilde r(t)\) means faster recovery"
+
+By definition,
+$$
+\tilde r(t) = -\frac{1}{2t}\Big[\log Q(t) - \log Q(0)\Big]
+\quad\Longrightarrow\quad
+\frac{Q(t)}{Q(0)} = e^{-2t\,\tilde r(t)} .
+$$
+
+Thus, for a fixed time \(t>0\), a **larger** \(\tilde r(t)\) gives a **smaller** ratio \(Q(t)/Q(0)\), i.e. perturbation energy decays more (the system is closer to equilibrium) — "faster recovery".
+
+* In stable systems (\(\lambda_{\max}(J)<0\)), \(\tilde r(t)\ge 0\) and
+$$
+  \lim_{t\to\infty} \tilde r(t) = -\lambda_{\max}(J) > 0
+$$
+  so a larger value indeed corresponds to faster asymptotic damping.
+* In unstable systems (\(\lambda_{\max}(J)>0\)), the long–time limit is
+$$
+\lim_{t\to\infty} \tilde r(t) = -\lambda_{\max}(J) < 0
+$$
+  and \(Q(t)/Q(0) = e^{-2t\tilde r(t)}\) *grows*; here the sign indicates growth rather than decay.
+
+So the statement "larger \(\tilde r(t)\) means faster recovery" is correct **for stable regimes**, which is the context we target when comparing predictability. The identity \(Q(t)/Q(0)=e^{-2t\tilde r(t)}\) is the key: it makes \(\tilde r(t)\) a decay rate per unit time under the chosen perturbation weighting.

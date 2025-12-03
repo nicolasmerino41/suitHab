@@ -1,0 +1,43 @@
+---
+title: "All Figures Structured"
+author: "Nico, Núria & Jeff"
+date: "2025-11-05"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Describing the communities
+### Abundance Heterogeneity
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/AbundanceDsitributions.jpg'
+)
+```
+
+### Degree Distributions
+```{r echo=FALSE, out.width='70%', fig.align='center'}
+knitr::include_graphics(
+  'C:/Users/nicol/OneDrive/PhD/GitHub/suitHab/Rmarkdowns/Figures/InOutDegrees.jpg'
+)
+```
+
+# Predictability across time
+
+

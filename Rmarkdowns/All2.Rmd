@@ -1,0 +1,194 @@
+---
+title: "All2"
+author: "Nico & Núria"
+date: "2025-10-22"
+output:
+  pdf_document:
+    toc: false
+    toc_depth: 5
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 5
+    number_sections: true
+    toc_float:
+      collapsed: false
+    highlight: tango
+  word_document:
+    toc: false
+    toc_depth: '5'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Overview
+
+This document outlines a systematic exploration of how network structure and symmetry affect the stability of generalized Lotka–Volterra (gLV) systems.  
+We quantify stability through three complementary metrics:
+
+1. **Resilience** - long-term asymptotic stability (dominant real eigenvalue).  
+2. **Reactivity** - transient amplification potential (largest eigenvalue of the symmetric part).  
+3. **Median Return Rate** - typical damping rate, capturing median rather than extreme modes of decay (see attached reference).
+
+We then apply these metrics across a hierarchy of *structural simplifications* and along a gradient of *interaction symmetry*.
+
+---
+
+# 2. Mathematical setup
+
+Consider the gLV system
+
+$$
+\frac{du_i}{dt} = u_i [K_i - u_i + (A u)_i],
+$$
+
+with equilibrium at \(u^*\). The Jacobian around this equilibrium is
+
+$$
+J = D (A - I), \qquad D = \mathrm{diag}(u^*).
+$$
+
+We study three complementary stability descriptors:
+
+| Metric | Definition | Interpretation |
+|---------|-------------|----------------|
+| **Resilience** | \( R = \max \Re(\lambda_i(J)) \) | Slowest decay mode; asymptotic stability |
+| **Reactivity** | \( X = \lambda_{\max}\big(\frac{J+J^\top}{2}\big) \) | Maximum instantaneous amplification |
+| **Median Return Rate** | \( M = \mathrm{median}_i[-\Re(\lambda_i(J))] \) | Typical decay rate across all modes |
+
+Resilience measures the *upper bound* of stability (worst mode),  
+while Median Return Rate reflects the *central tendency* of decay speeds - useful when many eigenvalues cluster near zero.
+
+---
+
+# 3. Structural simplification hierarchy
+
+We apply a sequence of transformations to \(A\) (and optionally \(u\)) that progressively destroy structure.
+
+| Step | Transformation | Keeps | Purpose |
+|------|----------------|-------|----------|
+| **0. Full** | Original Jacobian | Full structure | Baseline |
+| **1. Reshuffle** | Randomize nonzero \(A_{ij}\) values while keeping signs, topology, and variance | Mean, variance, topology | Weakest perturbation (VAR-SHUF) |
+| **2. Rowmean** | Replace each row’s magnitudes by its mean | Sign, topology | Removes within-row heterogeneity |
+| **3. Threshold** | Remove weakest \(q\%\) interactions | Strong ones remain | Simulates coarse-graining |
+| **4. Uniform-\(u\)** | Replace all \(u_i\) by \(\bar{u}\) | Interaction structure | Removes abundance heterogeneity |
+| **5. Rare-removal** | Remove species with \(u_i < \tau\) | Subnetwork | Mimics extinctions |
+
+Each step produces a simplified \(J'\), from which we measure  
+\( (R', X', M') \) and compare to the full metrics \( (R, X, M) \).
+
+---
+
+# 4. Degree-distribution effects (DEG-EFFECTS)
+
+We control for topology by varying degree heterogeneity independently:
+
+- **Uniform** degrees (Erdős–Rényi–like),
+- **Lognormal** heterogeneity,
+- **Pareto** hubs (heavy tails).
+
+All other parameters (connectance, mean |A|, variance) are held constant.  
+We test whether reshuffling and averaging alter stability differently across degree distributions.
+
+Expectation:  
+Uniform-degree networks show near invariance under reshuffling;  
+heterogeneous-degree networks show large deviations.
+
+---
+
+# 5. Variance-preserving reshuffling (VAR-SHUF)
+
+Reshuffling randomizes which species pairs interact strongly or weakly,  
+but keeps the empirical distribution of \(A_{ij}\).
+
+Formally:
+
+$$
+A'_{ij} =
+\begin{cases}
+\text{Random permutation of nonzero } A_{kl}, & i\ne j, \\
+0, & i=j.
+\end{cases}
+$$
+
+with \(\mathrm{sign}(A'_{ij}) = \mathrm{sign}(A_{ij})\).
+
+This serves as a null model that isolates the effect of *arrangement* from *magnitude statistics*.
+
+---
+
+# 6. Asymmetry gradients (ASYM-GRADIENT)
+
+We explore how stability depends on the balance between antisymmetric and symmetric interactions.
+
+Two complementary interpretations are used:
+
+### (A) Mutualism–trophic continuum
+We interpolate between a purely symmetric (mutualistic/competitive) and purely antisymmetric (trophic) system:
+
+$$
+A(\eta) = (1 - \eta) A_{\mathrm{trophic}} + \eta \frac{A_{\mathrm{trophic}} + A_{\mathrm{trophic}}^\top}{2}, \quad \eta \in [0,1].
+$$
+
+### (B) Intra-trophic symmetry
+We add partial symmetry *within* an otherwise trophic network:
+
+$$
+A(\eta) = (1 - \eta)A_{\mathrm{antisym}} + \eta A_{\mathrm{sym\,rand}},
+$$
+
+where \(A_{\mathrm{sym\,rand}} = (B + B^\top)/2\) has the same distribution of |A| and signs.
+
+Both versions quantify a 'coefficient of symmetry' \(\eta\).  
+At \(\eta=0\), interactions are fully antisymmetric;  
+as \(\eta\) increases, reciprocal feedback grows.
+
+---
+
+# 7. Expected outcomes
+
+| Gradient | Trend in Resilience | Trend in Reactivity | Trend in Median Return Rate |
+|-----------|--------------------|----------------------|------------------------------|
+| **VAR-SHUF** | Minimal effect (controls mean/var only) | Slight increase (random phases) | Stable or mild improvement |
+| **DEG-EFFECTS** | Sensitive to hub heterogeneity | Nonlinear amplification possible | Typically decreases with heterogeneity |
+| **ASYM-GRADIENT** | Increases with symmetry (destabilization) | Strong rise with symmetry | Return rate decreases (slower damping) |
+
+---
+
+# 8. Simulation plan
+
+For each sampled community (S, connectance, etc.):
+
+1. Build \(A\) under chosen degree model.  
+2. Draw equilibrium abundances \(u\).  
+3. Compute \(J = D(A - I)\).  
+4. Stabilize (if necessary) via uniform shrinkage.  
+5. Apply simplifications (steps 1–5).  
+6. Sweep asymmetry coefficient \(\eta\).  
+7. Measure (R, X, M) for each case.  
+8. Summarize via \(\Delta\)-metrics:  
+   \(\Delta R = R' - R, \; \Delta X = X' - X, \; \Delta M = M' - M.\)
+
+---
+
+# 9. Expected interpretation framework
+
+- **Resilience** captures the asymptotic stability boundary (how close to collapse).  
+- **Reactivity** reveals transient amplification that may precede collapse.  
+- **Median Return Rate** represents the average damping landscape, robust to outliers.
+
+Comparing them across simplifications and symmetry gradients reveals which structural properties drive long-term vs. short-term vs. typical stability.
+
+---
+
+# 10. Next steps
+
+1. Implement in Julia (next section).  
+2. Generate comparative plots:
+   - \(\Delta\)Resilience vs. step index.
+   - \(\Delta\)Reactivity vs. asymmetry coefficient.
+   - Median Return Rate distribution across degree families.
+3. Combine into summary heatmaps linking structural simplification × symmetry × metric.
+
