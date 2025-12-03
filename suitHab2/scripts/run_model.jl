@@ -5,12 +5,12 @@ using .suitHab
 rng = MersenneTwister(1)
 
 S = 500
-B = 24
-L = 20
-T = 1.2
+B = 50
+L = 2000
+T = 0.01
 
 metaweb = build_ppm(S, B, L, T)
-total_links_possible = S * (S - 1)
+total_links_possible = S * (S - 1)/2
 realized_links = count(==(1), metaweb.A)
 connectance = realized_links / total_links_possible
 
@@ -33,6 +33,4 @@ R = realized_metaweb(metaweb, F)
 
 println("Realized metaweb links: ", sum(R))
 
-for i in 24:30
-    plot_grid(B_layer[i])
-end
+plot_grid(metaweb.A) 
