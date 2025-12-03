@@ -4,29 +4,6 @@ using Random, Statistics, Distributions
 
 export make_niches
 
-# """
-#     make_climate_grid(nx, ny; kind=:gradient)
-
-# Return an `nx × ny` grid of a 1-D climate variable in [0,1].
-# `kind` can be `:gradient` or `:ridge` (bimodal/patchy).
-# """
-# function make_climate_grid(nx::Int, ny::Int; kind::Symbol=:gradient, seed::Int=1)
-#     rng = MersenneTwister(seed)
-#     if kind == :gradient
-#         x = range(0, 1; length=nx)
-#         y = range(0, 1; length=ny)
-#         C = [xi for xi in x, yi in y]  # simple x-gradient
-#     else
-#         # ridge: two bands
-#         C = zeros(nx, ny)
-#         for i in 1:nx, j in 1:ny
-#             C[i,j] = rand(rng) < 0.5 ? 0.25 + 0.05*randn(rng) : 0.75 + 0.05*randn(rng)
-#         end
-#         C .= clamp.(C, 0, 1)
-#     end
-#     return C
-# end
-
 """
     make_niches(rng, S; align=0.5, σ=0.12, basal_frac=0.3)
 
