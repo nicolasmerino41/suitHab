@@ -13,6 +13,7 @@ include("Assembly/Suitability.jl")
 include("Assembly/RealizedNetwork.jl")
 include("Assembly/LossScenarios.jl")
 include("Visualisation/Plotting.jl")
+include("Visualisation/VisualiseEscalator.jl")
 
 # == Bring functions into namespace ==
 
@@ -27,6 +28,7 @@ using .RealizedNetwork: realized_metaweb
 using .LossScenarios: apply_loss
 using .SpatialUtils
 using .Plotting
+using .VisualiseEscalator
 
 # == Export clean user API ==
 export build_ppm,
@@ -37,6 +39,6 @@ export build_ppm,
        abiotic_suitability, combine_suitability, movement_filter,
        realized_metaweb,
        apply_loss,
-       plot_grid
-
+       plot_grid,
+       visualise_escalator
 end
