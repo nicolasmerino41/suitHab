@@ -9,58 +9,59 @@ using ..Types: Metaweb
 function ppm(S, B, L, T)
     A = zeros(Int, S, S)
 
-    # desired connectance = L / total_possible
-    total_possible = S * (S - 1)
-    target_connectance = L / total_possible
+    β = (S^2 - B^2) / (2L - 1)
+    beta_dist = Beta(β, β)
 
-    # Expected proportion of possible prey per species
-    # For species i, possible prey = i-1
-    # Expected prey count ≈ target_connectance * (i - 1)
-    # This ensures total expected links ≈ L
-    # (minor deviation at basal because few possible prey there)
-    
-    for i in B+1:S
+    prey_count = zeros(Int, S)
+
+    current = B
+
+    while current < S
+        current += 1
+        i = current
+
         existing = 1:(i-1)
         n_i = length(existing)
 
-        # Expected number of prey for species i
-        expected_prey = target_connectance * n_i
-        k_i = max(1, round(Int, expected_prey))
+        # 1) First prey
+        j = rand(existing)
+        A[i,j] = 1
+        prey_count[i] += 1
 
-        # Always pick at least 1 prey (from PPM logic)
-        # First prey: uniformly random
-        first_prey = rand(existing)
-        A[i, first_prey] = 1
+        # provisional TLs:
+        s_hat = 1 .+ prey_count[1:i]
 
-        if k_i > 1
-            # Compute provisional trophic levels as in classical PPM
-            provisional_s = zeros(Float64, i)
-            provisional_s[1:i] .= 1.0  # simple placeholder
-            
-            # Trophic similarity-based probabilities
-            # (still valid even without real s yet)
-            probs = [exp(-abs(provisional_s[first_prey] - provisional_s[j]) / T)
-                     for j in existing]
+        # 2) Expected prey count
+        k_exp = rand(beta_dist) * n_i
+        k_total = max(1, round(Int, k_exp))
+        k_extra = k_total - 1
+
+        if k_extra > 0
+            # probabilities based on provisional TLs
+            probs = [exp(-abs(s_hat[j] - s_hat[ℓ]) / T) for ℓ in existing]
             probs ./= sum(probs)
 
-            # Sample remaining prey
-            chosen = rand(Categorical(probs), k_i - 1)
+            chosen = rand(Distributions.Categorical(probs), k_extra)
             for idx in unique(chosen)
                 prey = existing[idx]
                 A[i, prey] = 1
+                prey_count[i] += 1
             end
         end
     end
 
-    return A
+    # final, correct TL computation
+    s = trophic_levels(A)
+
+    return A, s
 end
 
 function build_ppm(S, B, L, T)
-    A = ppm(S, B, L, T)
+    A, s = ppm(S, B, L, T)
 
-    # Compute trophic levels
-    s = trophic_levels(A)
-
+    # # Compute trophic levels
+    # s = trophic_levels(A)
+    
     # Identify basal species
     basal = collect(1:B)
 
