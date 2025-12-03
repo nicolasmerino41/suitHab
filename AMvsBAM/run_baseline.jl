@@ -35,10 +35,10 @@ default_align = 0.4
 Cs     = range(0.001, 0.1; length=15)
 Aligns = range(0.0, 1.0; length=15)
 R95s   = Int.(range(4.0, 40.0; length=10))
-Sigmas = range(0.02, 0.3; length=15)
+Sigmas = range(0.02, 1.0; length=15)
 
 # climate grid (choose gradient here)
-grid_type = "fractal"
+grid_type = "ridge"
 Cgrid = Climate.make_climate_grid(nx, ny; kind=Symbol(grid_type), seed=11)
 
 # ---------------------------
