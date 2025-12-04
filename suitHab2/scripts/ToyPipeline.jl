@@ -1,6 +1,6 @@
-S = 100
+S = 20
 B = 10
-L = 20
+L = 10
 T = 0.01
 
 nx, ny = 30, 30
@@ -24,6 +24,7 @@ end
 
 B_layer = propagate_biotic(metaweb, B0)
 
-for i in 31:100
+for i in 15:20
     plot_grid(B_layer[i]; title="Biotic suitability for consumer $i")
 end
+
