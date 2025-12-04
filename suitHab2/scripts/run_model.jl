@@ -4,9 +4,9 @@ using .suitHab
 
 rng = MersenneTwister(1)
 
-S = 500
-B = 50
-L = 2000
+S = 120
+B = 24
+L = 2172
 T = 0.01
 
 metaweb = build_ppm(S, B, L, T)
