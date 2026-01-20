@@ -341,8 +341,7 @@ end
 # ----------------------------
 # Experiment runner
 # ----------------------------
-
-struct RunParams
+struct RunParams2_1
     n1::Int
     n2::Int
     S::Int
@@ -362,7 +361,7 @@ One replicate (fixed env + web) returns mean curves over fgrid:
 EA(f), EAB(f), dE*(f) where:
 dE*(f) = (EAB(f)-EAB(0)) - (EA(f)-EA(0))
 """
-function run_one(rng::AbstractRNG, p::RunParams, fgrid::Vector{Float64})
+function run_one(rng::AbstractRNG, p::RunParams2_1, fgrid::Vector{Float64})
     env1, env2 = make_environment(rng; n1=p.n1, n2=p.n2)
     A, mu1, mu2 = make_abiotic_maps(rng, env1, env2; S=p.S, niche_sigma=p.niche_sigma, niche_cut=p.niche_cut)
 
@@ -406,7 +405,7 @@ function run_sweep(; seed::Int=1234, reps::Int=20)
     geoms        = [:random, :cluster, :front]
 
     # Tuned defaults to get earlier action
-    base = RunParams(
+    base = RunParams2_1(
         80, 80,      # grid
         80,          # species
         0.25,        # basal fraction
@@ -433,7 +432,7 @@ function run_sweep(; seed::Int=1234, reps::Int=20)
     println("geom,k_prey,select_sigma,dE*(0.50),AUC(dE*)")
 
     for g in geoms, kp in kprey_list, ss in selects_list
-        p = RunParams(base.n1, base.n2, base.S, base.basal_frac, base.Lmax,
+        p = RunParams2_1(base.n1, base.n2, base.S, base.basal_frac, base.Lmax,
                       base.niche_sigma, base.niche_cut,
                       kp, ss, base.match_sigma, g, base.Emin)
 
@@ -518,7 +517,7 @@ function run_sweep(; seed::Int=1234, reps::Int=20)
         ylims!(ax, (ylow, yhigh))
     end
 
-    axislegend(axes[:front]; position=:rb)  # one legend, on the rightmost panel
+    axislegend(axes[:front]; position=:rt)  # one legend, on the rightmost panel
     display(fig)
 
     return nothing

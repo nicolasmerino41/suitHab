@@ -1,3 +1,4 @@
+#!/usr/bin/env julia
 # suitHab_mvp_v2.jl
 #
 # Synthetic MVP v2:
@@ -12,8 +13,6 @@
 using Random
 using Statistics
 using Printf
-
-# Plotting
 using CairoMakie
 
 # ----------------------------
@@ -102,7 +101,7 @@ Abiotic suitability maps A[i,cell] as thresholded Gaussian niche in 2D env space
 Returns BitMatrix A (S x Ncells) and species optima mu1,mu2.
 """
 function make_abiotic_maps(rng::AbstractRNG, env1::Matrix{Float64}, env2::Matrix{Float64};
-                           S::Int=80, niche_sigma::Float64=0.9, niche_cut::Float64=0.35)
+                           S::Int=80, niche_sigma::Float64=0.9, niche_cut::Float64=0.45)
     n1, n2 = size(env1)
     N = n1 * n2
 
@@ -224,7 +223,6 @@ end
 # ----------------------------
 # Habitat loss: one removal order per run (nested removals)
 # ----------------------------
-
 function make_loss_order(rng::AbstractRNG, geometry::Symbol, env1::Matrix{Float64})
     n1, n2 = size(env1)
     N = n1 * n2
@@ -270,5 +268,207 @@ end
 # ----------------------------
 # Extinction counts
 # ----------------------------
+# A-only: extinct if remaining A-cells < Emin
+function extinction_count_Aonly(A::BitMatrix, keep::BitVector; Emin::Int=50)
+    S, N = size(A)
+    ext = 0
+    @inbounds for i in 1:S
+        cnt = 0
+        for k in 1:N
+            if keep[k] & A[i,k]
+                cnt += 1
+                if cnt >= Emin
+                    break
+                end
+            end
+        end
+        ext += (cnt < Emin)
+    end
+    return ext
+end
 
-# A-only: ex
+# AB: build presence P by trophic level (strong rule), extinct if remaining P-cells < Emin
+function extinction_count_AB_strong(A::BitMatrix, keep::BitVector,
+                                   TL::Vector{Int}, preylist::Vector{Vector{Int}};
+                                   Emin::Int=1)
+
+    S, N = size(A)
+    order = sortperm(TL)
+
+    P = BitMatrix(undef, S, N)
+    P .= false
+
+    @inbounds for i in order
+        if TL[i] == 1
+            for k in 1:N
+                P[i,k] = keep[k] & A[i,k]
+            end
+        else
+            prey = preylist[i]
+            if isempty(prey)
+                # failsafe: treat as basal
+                for k in 1:N
+                    P[i,k] = keep[k] & A[i,k]
+                end
+            else
+                for k in 1:N
+                    sup = false
+                    for pj in prey
+                        sup |= P[pj,k]
+                        if sup
+                            break
+                        end
+                    end
+                    P[i,k] = keep[k] & A[i,k] & sup
+                end
+            end
+        end
+    end
+
+    ext = 0
+    @inbounds for i in 1:S
+        cnt = 0
+        for k in 1:N
+            if P[i,k]
+                cnt += 1
+                if cnt >= Emin
+                    break
+                end
+            end
+        end
+        ext += (cnt < Emin)
+    end
+    return ext
+end
+
+# ----------------------------
+# Experiment runner
+# ----------------------------
+struct RunParams2
+    n1::Int
+    n2::Int
+    S::Int
+    basal_frac::Float64
+    Lmax::Int
+    niche_sigma::Float64
+    niche_cut::Float64
+    k_prey::Int
+    select_sigma::Float64
+    match_sigma::Float64
+    geometry::Symbol
+    Emin::Int
+end
+
+"""
+run_one returns vectors EA, EAB, dE_star over fgrid for ONE replicate (fixed env + web).
+dE_star(f) = (EAB(f)-EAB(0)) - (EA(f)-EA(0))
+"""
+function run_one(rng::AbstractRNG, p::RunParams2, fgrid::Vector{Float64})
+    env1, env2 = make_environment(rng; n1=p.n1, n2=p.n2)
+    A, mu1, mu2 = make_abiotic_maps(rng, env1, env2; S=p.S, niche_sigma=p.niche_sigma, niche_cut=p.niche_cut)
+
+    basals, TL, preylist = build_metaweb(rng;
+        S=p.S, basal_frac=p.basal_frac, Lmax=p.Lmax,
+        k_prey=p.k_prey, match_sigma=p.match_sigma, select_sigma=p.select_sigma,
+        mu1=mu1, mu2=mu2
+    )
+
+    N = p.n1 * p.n2
+    ord = make_loss_order(rng, p.geometry, env1)
+
+    EA  = zeros(Float64, length(fgrid))
+    EAB = zeros(Float64, length(fgrid))
+    dE  = zeros(Float64, length(fgrid))
+
+    # Baseline f=0
+    keep0 = trues(N)
+    EA0  = extinction_count_Aonly(A, keep0; Emin=p.Emin)
+    EAB0 = extinction_count_AB_strong(A, keep0, TL, preylist; Emin=p.Emin)
+
+    for (t, f) in enumerate(fgrid)
+        keep = keep_from_order(ord, f, N)
+        EA[t]  = extinction_count_Aonly(A, keep; Emin=p.Emin)
+        EAB[t] = extinction_count_AB_strong(A, keep, TL, preylist; Emin=p.Emin)
+        dE[t]  = (EAB[t] - EAB0) - (EA[t] - EA0)
+    end
+
+    return EA, EAB, dE
+end
+
+function run_sweep(; seed::Int=1234, reps::Int=15)
+    rng = MersenneTwister(seed)
+
+    # habitat loss fractions
+    fgrid = collect(0.0:0.05:0.90)
+
+    # Sweep dimensions
+    kprey_list   = [1, 3, 6]
+    selects_list = [0.25, 0.6, 1.5]          # smaller => prey more similar (higher synchrony)
+    geoms        = [:random, :cluster, :front]
+
+    # Defaults
+    base = RunParams2(
+        80, 80,      # grid
+        80,          # species
+        0.25,        # basal fraction
+        4,           # Lmax
+        0.9,         # niche_sigma
+        0.45,        # niche_cut
+        3,           # k_prey (overwritten)
+        0.6,         # select_sigma (overwritten)
+        1.2,         # match_sigma (fixed)
+        :random,     # geometry (overwritten)
+        50           # Emin: minimum remaining cells to count as "not extinct"
+    )
+
+    # Store mean curves for geometry = :random (for plotting)
+    dEmean_random = Dict{Tuple{Int,Float64}, Vector{Float64}}()
+
+    for g in geoms, kp in kprey_list, ss in selects_list
+        p = RunParams2(base.n1, base.n2, base.S, base.basal_frac, base.Lmax,
+                      base.niche_sigma, base.niche_cut,
+                      kp, ss, base.match_sigma, g, base.Emin)
+
+        EA_sum  = zeros(Float64, length(fgrid))
+        EAB_sum = zeros(Float64, length(fgrid))
+        dE_sum  = zeros(Float64, length(fgrid))
+
+        for r in 1:reps
+            rrng = MersenneTwister(rand(rng, UInt))
+            EA, EAB, dE = run_one(rrng, p, fgrid)
+            EA_sum  .+= EA
+            EAB_sum .+= EAB
+            dE_sum  .+= dE
+        end
+
+        @printf("\nDONE geometry=%s k_prey=%d select_sigma=%.3f\n", String(g), kp, ss)
+        t50 = findfirst(==(0.50), fgrid)
+        @printf("  mean dE*(f=0.50): %.3f\n", dE_sum[t50] / reps)
+
+        if g == :random
+            dEmean_random[(kp, ss)] = dE_sum ./ reps
+        end
+    end
+
+    # ---------- plotting ----------
+    fig = Figure(size=(900, 600))
+    ax = Axis(fig[1,1],
+        xlabel = "habitat loss f",
+        ylabel = "baseline-corrected amplification dE*",
+        title  = "Synthetic MVP v2 (geometry = random)"
+    )
+
+    for kp in kprey_list, ss in selects_list
+        curve = dEmean_random[(kp, ss)]
+        lines!(ax, fgrid, curve; label=@sprintf("k=%d, sel=%.2f", kp, ss))
+    end
+
+    axislegend(ax; position=:rb)
+    display(fig)
+
+end
+
+# ----------------------------
+# Main
+# ----------------------------
+run_sweep(seed=1234, reps=50)
