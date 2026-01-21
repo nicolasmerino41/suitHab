@@ -14,7 +14,6 @@ using CairoMakie
 # ----------------------------
 # Utilities: simple spatial smoothing (no external deps)
 # ----------------------------
-
 function smooth_field!(Z::Matrix{Float64}; iters::Int=25)
     n1, n2 = size(Z)
     tmp = similar(Z)
@@ -91,7 +90,6 @@ end
 # ----------------------------
 # Synthetic landscape + abiotic niches
 # ----------------------------
-
 function make_environment(rng::AbstractRNG; n1::Int=80, n2::Int=80, smooth_iters::Int=25)
     env1 = randn(rng, n1, n2)
     env2 = randn(rng, n1, n2)
@@ -130,7 +128,6 @@ end
 # ----------------------------
 # Metaweb (acyclic TL) with prey-guild synchrony
 # ----------------------------
-
 """
 build_metaweb with prey-guild construction:
 - Consumers pick prey from lower trophic levels.
@@ -225,7 +222,6 @@ end
 # ----------------------------
 # Habitat loss: nested removals via one order per run
 # ----------------------------
-
 function make_loss_order(rng::AbstractRNG, geometry::Symbol, env1::Matrix{Float64})
     n1, n2 = size(env1)
     N = n1 * n2
@@ -268,7 +264,6 @@ end
 # ----------------------------
 # Extinction counts (with Emin threshold)
 # ----------------------------
-
 function extinction_count_Aonly(A::BitMatrix, keep::BitVector; Emin::Int=1)
     S, N = size(A)
     ext = 0
@@ -396,7 +391,7 @@ end
 function run_sweep(; seed::Int=1234, reps::Int=20)
     rng = MersenneTwister(seed)
 
-    fgrid = collect(0.0:0.05:0.90)
+    fgrid = collect(0.0:0.01:0.80)
     t50 = findfirst(==(0.50), fgrid)
 
     # Sweep
@@ -517,7 +512,7 @@ function run_sweep(; seed::Int=1234, reps::Int=20)
         ylims!(ax, (ylow, yhigh))
     end
 
-    axislegend(axes[:front]; position=:rt)  # one legend, on the rightmost panel
+    axislegend(axes[:front]; position=:lt)  # one legend, on the rightmost panel
     display(fig)
 
     return nothing
