@@ -615,7 +615,7 @@ struct MPParams_patch
 end
 
 function run_mvp_vnext(; seed::Int=1234,
-    n1::Int=80, n2::Int=80, S::Int=80,
+    n1::Int=100, n2::Int=100, S::Int=1000,
     basal_frac::Float64=0.25, Lmax::Int=4,
     niche_sigma::Float64=0.8, niche_cut::Float64=0.45,
     k_prey::Int=3, select_sigma::Float64=0.6, match_sigma::Float64=1.0,
