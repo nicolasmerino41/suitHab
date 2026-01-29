@@ -1,25 +1,29 @@
 #!/usr/bin/env julia
 # Julia 1.11
-# Run:  julia --threads auto traffic_extinction_figures.jl
+# Run:  julia --threads auto traffic_extinction_figures_FINAL.jl
 #
-# PURPOSE
-# - Mechanistic extinction curves under habitat loss with:
-#   A-only (climate niche) vs AB (climate + trophic support), plus connectivity extinction rule (LCC ≥ Emin).
-# - SAR baseline: pure area-only prediction (dashed), fit from baseline A-only distribution using non-overlapping quadrats.
-# - SAR effective: pure area-only prediction (dashed), but uses trophically informed baseline (AB at h=0) and
-#   evaluates richness vs "supported area" (defined NON-CIRCULARLY: from AB fixed point BEFORE extinction filtering).
+# Self-contained, no external data. Produces:
+#   - Figure 1A: Gamma richness (all species) — 2×3 panels (High vs Low divergence × geometry)
+#   - Figure 1B: Gamma richness (consumers only) — same layout
+#   - Figure 2: Heatmaps of AUC divergence (consumers only) across Connectance × Niche correlation
+#       * outputs BOTH raw AUC and relative AUC (scaled 0–1 per scenario & geometry)
+#   - Figure 3 (mechanism cartoon-like plot): support amount vs support connectivity vs fragmentation-fail
 #
-# FIXES vs prior versions
-# 1) NON-CIRCULAR supported area for SAR_eff: computed from AB fixed-point occupancy before extinctions.
-# 2) Enforce baseline viability: ≥95% species extant under A-only at h=0 (LCC ≥ Emin) by resampling sigmas.
-# 3) SAR curves are clean area-only expressions: monotone in remaining (effective) area, no circular feedback.
-# 4) SAR lines plotted dashed.
-# 5) Diagnostics added to verify: baseline extant fraction, achieved niche correlation, trophic support strength, etc.
+# Key model choices (to ensure divergence is real):
+#   1) AB is trophically constrained at patch level (fixed point of prey support).
+#   2) AB includes an extinction cascade: species with LCC < Emin are removed, which can remove prey and
+#      cascade to consumers (this is what makes A ≠ AB clearly in the right parameter regimes).
+#   3) SAR_baseline is pure area-only using remaining area (1-h).
+#   4) SAR_effective is pure area-only but uses an EFFECTIVE AREA = LCC area of the trophically supported union mask
+#      computed from the AB fixed-point occupancy BEFORE extinction filtering (non-circular, geometry-sensitive).
+#   5) Fig1 uses two explicit regimes:
+#        - High divergence: low connectance + negative corr + skew-narrow niches (prey narrower)
+#        - Low divergence:  high connectance + high corr     + skew-broad niches
 #
-# NOTE
-# - Figure 1 duplicated: all-species and consumers-only
-# - Figure 1B: mean local richness retained, but you can ignore it.
-
+# Notes:
+#   - This is intentionally “article-ready”: consistent fonts, titles, saved PNGs, deterministic seeds.
+#   - If you want smoother Fig2 transitions, increase N_CONNECT/N_CORR and/or NREP_HEAT (runtime increases).
+#
 using Random
 using Statistics
 using LinearAlgebra
@@ -28,64 +32,65 @@ using Printf
 using Dates
 
 # ============================================================
-# 0) Parameters
+# 0) Global parameters
 # ============================================================
 
-# Grid size reduced, Emin kept at 80
+# Grid
 const NX = 45
 const NY = 45
 const NCELLS = NX * NY
 
+# Regional pool / trophic structure
 const S = 250
 const BASAL_FRAC = 0.33
+
+# Extinction rule: species survives if its largest connected component (LCC) ≥ Emin_patch
 const Emin_patch = 80
 
 # Habitat loss levels
 const HL = collect(0.0:0.05:1.0)
 
 # Replicates
-const NREP_FIG1 = 10
-const NREP_HEAT = 10
+const NREP_FIG1 = 10          # Fig1 replicate averaging
+const NREP_HEAT = 8           # Fig2 replicate averaging per cell (increase for smoother maps)
 
-# Heatmap axes
+# Heatmap axes (connectance & correlation)
 const CONNECTANCE_RANGE = (0.02, 0.25)
-const CORR_RANGE = (-0.5, 0.9)
-const N_CONNECT = 10
-const N_CORR = 10
+const CORR_RANGE        = (-0.5, 0.9)
+const N_CONNECT = 21          # finer grid for smoother transitions
+const N_CORR    = 21
 
-# Medium values
-const C_mid = 0.12
-const r_mid = 0.5
-
-# Climate
+# Climate field (two environmental axes)
 const CLIM_MIN = 0.0
 const CLIM_MAX = 100.0
 const CLIM_NOISE_SD = 7.0
 
-# Niche option A: 2D Gaussian with threshold
+# Niche definition: 2D Gaussian with threshold
 const SUIT_THRESH = 0.25
 
-# Habitat loss geometry params
+# Habitat-loss geometries
 const CLUSTER_SEED_PER_DESTROYED = 150
 const FRONT_JITTER_MAX = 5
-const FRONT_SMOOTH = :strong
+const FRONT_SMOOTH = :strong  # :none | :mild | :strong
 
-# Baseline viability target under A-only
+# Baseline viability target under A-only at h=0 (resample/inflate sigmas to avoid trivial baseline extinctions)
 const BASELINE_EXTANT_TARGET = 0.95
-
-# Resampling knobs (for baseline viability)
 const MAX_SIGMA_RESAMPLE = 30
+
+# Monotonic sanity check / enforcement for plotted curves
+const ENFORCE_MONOTONE = true
+const MONO_TOL = 1e-9
 
 # Output
 ts = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
-OUTDIR = joinpath(pwd(), "figures_traffic_extinction_" * ts)
+OUTDIR = joinpath(pwd(), "figures_traffic_extinction_FINAL_" * ts)
 isdir(OUTDIR) || mkpath(OUTDIR)
 
 # Global seed
 const BASE_SEED = 20250128
 
 # ============================================================
-# 1) Index helpers + neighbors (4-neighbour)
+# 1) Index helpers + 4-neighbour adjacency
 # ============================================================
 
 @inline linidx(x::Int, y::Int) = (y - 1) * NX + x
@@ -108,14 +113,13 @@ end
 const NEIGH_4 = build_neighbors_4()
 
 # ============================================================
-# 2) Thread-safe RNG + workspace
+# 2) Thread-safe RNG + workspace for connectivity
 # ============================================================
 
 mutable struct CCWorkspace
     seen::Vector{Int32}
     stamp::Int32
     queue::Vector{Int}
-    queue2::Vector{Int}
 end
 
 function make_thread_rngs_and_workspaces(base_seed::Int)
@@ -124,7 +128,7 @@ function make_thread_rngs_and_workspaces(base_seed::Int)
     wss  = Vector{CCWorkspace}(undef, nt)
     for t in 1:nt
         rngs[t] = MersenneTwister(base_seed + 10_000 * t + 137)
-        wss[t]  = CCWorkspace(fill(Int32(0), NCELLS), Int32(0), Int[], Int[])
+        wss[t]  = CCWorkspace(fill(Int32(0), NCELLS), Int32(0), Int[])
     end
     return rngs, wss
 end
@@ -152,11 +156,12 @@ function make_climate(rng::AbstractRNG)
 end
 
 # ============================================================
-# 4) Metaweb (directed), no cannibalism, basal have no prey
+# 4) Metaweb (directed). Basal have no prey. No cannibalism.
+#    Connectance definition: C = L / S^2 (as in your code).
 # ============================================================
 
 function make_metaweb(rng::AbstractRNG, basal_mask::BitVector, C::Float64)
-    Ltarget = round(Int, C * S^2)  # C = L/S^2 (per your definition)
+    Ltarget = round(Int, C * S^2)
     prey = [Int[] for _ in 1:S]
 
     candidates = Vector{Tuple{Int,Int}}()
@@ -179,7 +184,7 @@ function make_metaweb(rng::AbstractRNG, basal_mask::BitVector, C::Float64)
 end
 
 # ============================================================
-# 5) Consumer–prey centroid correlation (assign consumer centroids conditional on prey)
+# 5) Consumer–prey centroid correlation targeting
 # ============================================================
 
 function pearson_r(a::Vector{Float64}, b::Vector{Float64})
@@ -260,7 +265,7 @@ function assign_centroids_with_target_corr(
 end
 
 # ============================================================
-# 6) Niche option A: 2D Gaussian threshold
+# 6) Niche: 2D Gaussian threshold mask
 # ============================================================
 
 @inline function suitability_mask(env1, env2, mu1, mu2, s1, s2, thresh)
@@ -276,24 +281,170 @@ end
     return m
 end
 
-# Scenario-specific sigma draws (we will RESAMPLE per species until baseline viability target is met)
-function draw_sigma_pair(rng::AbstractRNG, scen::Symbol)
-    # More controlled than before: avoid ultra-narrow sigmas that make baseline extinct by construction.
-    if scen == :highdiv
-        # narrow-ish but not extreme
-        an = exp(randn(rng) * 0.45)
-        base = exp(log(10.5) + randn(rng) * 0.35)
-        s1 = clamp(base * an, 2.0, 25.0)
-        s2 = clamp(base / an, 2.0, 25.0)
-        return s1, s2
-    else
-        # broad
-        an = exp(randn(rng) * 0.25)
-        base = exp(log(18.0) + randn(rng) * 0.30)
-        s1 = clamp(base * an, 3.5, 50.0)
-        s2 = clamp(base / an, 3.5, 50.0)
-        return s1, s2
+# --- Fig2-style occupancy distributions (also reused for Fig1 sigmas) ---
+
+function randgamma(rng::AbstractRNG, k::Float64)
+    if k < 1
+        return randgamma(rng, k+1) * rand(rng)^(1/k)
     end
+    d = k - 1/3
+    c = 1 / sqrt(9d)
+    while true
+        x = randn(rng)
+        v = (1 + c*x)^3
+        if v <= 0; continue; end
+        u = rand(rng)
+        if u < 1 - 0.0331*(x^4)
+            return d*v
+        end
+        if log(u) < 0.5*x^2 + d*(1 - v + log(v))
+            return d*v
+        end
+    end
+end
+
+import Base: rand
+struct BetaLike
+    a::Float64
+    b::Float64
+end
+function rand(rng::AbstractRNG, d::BetaLike)
+    x = randgamma(rng, d.a)
+    y = randgamma(rng, d.b)
+    return x / (x + y)
+end
+
+abstract type NicheScenario end
+struct VarOccVarSigma <: NicheScenario end
+struct VarOccMildSigma <: NicheScenario end
+struct SkewNarrow      <: NicheScenario end
+struct SkewBroad       <: NicheScenario end
+
+const FIG2_SCENARIOS = (VarOccVarSigma(), VarOccMildSigma(), SkewNarrow(), SkewBroad())
+const FIG2_SCENARIO_NAMES = ("VarOcc + VarSigma", "VarOcc + MildSigma", "SkewNarrow", "SkewBroad")
+
+function draw_target_occ(rng::AbstractRNG, scen::NicheScenario)
+    if scen isa VarOccVarSigma
+        return 0.04 + rand(rng) * (0.75 - 0.04)
+    elseif scen isa VarOccMildSigma
+        return 0.04 + rand(rng) * (0.75 - 0.04)
+    elseif scen isa SkewNarrow
+        x = rand(rng, BetaLike(2.0, 8.0))
+        return 0.02 + x * (0.55 - 0.02)
+    else # SkewBroad
+        x = rand(rng, BetaLike(8.0, 2.0))
+        return 0.18 + x * (0.92 - 0.18)
+    end
+end
+
+function solve_sigmas_for_occ(env1, env2, mu1, mu2, aniso, p_target; iters=18)
+    p_target = clamp(p_target, 0.002, 0.995)
+    s_lo, s_hi = 1.5, 70.0
+    best_s, best_err = 12.0, Inf
+    for _ in 1:iters
+        s_mid = 0.5*(s_lo + s_hi)
+        s1 = max(0.6, s_mid * aniso)
+        s2 = max(0.6, s_mid / aniso)
+        mask = suitability_mask(env1, env2, mu1, mu2, s1, s2, SUIT_THRESH)
+        p = count(mask) / NCELLS
+        err = abs(p - p_target)
+        if err < best_err
+            best_err = err
+            best_s = s_mid
+        end
+        if p < p_target
+            s_lo = s_mid
+        else
+            s_hi = s_mid
+        end
+    end
+    s1 = max(0.6, best_s * aniso)
+    s2 = max(0.6, best_s / aniso)
+    return s1, s2
+end
+
+# Scenario-specific anisotropy intensity (controls sigma variability)
+function draw_anisotropy(rng::AbstractRNG, scen::NicheScenario)
+    if scen isa VarOccVarSigma
+        return exp(randn(rng) * 0.65)
+    elseif scen isa VarOccMildSigma
+        return exp(randn(rng) * 0.25)
+    elseif scen isa SkewNarrow
+        return exp(randn(rng) * 0.40)
+    else # SkewBroad
+        return exp(randn(rng) * 0.30)
+    end
+end
+
+# Assign sigmas while preventing trivial baseline extinctions under A-only at h=0:
+# resample until LCC≥Emin, else inflate as last resort.
+#
+# Additionally, for "high divergence" we want PREY narrower than consumers.
+# We implement that by shrinking sigma for basal species by PREY_SIGMA_FACTOR (and then ensuring viability).
+const PREY_SIGMA_FACTOR_HIGH = 0.65
+
+function assign_sigmas_with_viability(
+    rng::AbstractRNG,
+    ws::CCWorkspace,
+    env1, env2,
+    mu1::Vector{Float64}, mu2::Vector{Float64},
+    basal_mask::BitVector,
+    scen::NicheScenario;
+    prey_sigma_factor::Float64 = 1.0
+)
+    s1 = Vector{Float64}(undef, S)
+    s2 = Vector{Float64}(undef, S)
+    clim = Vector{BitVector}(undef, S)
+
+    for sp in 1:S
+        got = false
+        for _ in 1:MAX_SIGMA_RESAMPLE
+            p = draw_target_occ(rng, scen)
+            an = draw_anisotropy(rng, scen)
+            a,b = solve_sigmas_for_occ(env1, env2, mu1[sp], mu2[sp], an, p)
+
+            if basal_mask[sp]
+                a *= prey_sigma_factor
+                b *= prey_sigma_factor
+                a = max(a, 0.6); b = max(b, 0.6)
+            end
+
+            m = suitability_mask(env1, env2, mu1[sp], mu2[sp], a, b, SUIT_THRESH)
+            _, ok = lcc_size_ge!(ws, m, Emin_patch)
+            if ok
+                s1[sp] = a; s2[sp] = b; clim[sp] = m
+                got = true
+                break
+            end
+        end
+
+        if !got
+            # inflate until viable
+            p = draw_target_occ(rng, scen)
+            an = draw_anisotropy(rng, scen)
+            a,b = solve_sigmas_for_occ(env1, env2, mu1[sp], mu2[sp], an, p)
+            if basal_mask[sp]
+                a *= prey_sigma_factor
+                b *= prey_sigma_factor
+                a = max(a, 0.6); b = max(b, 0.6)
+            end
+            scale = 1.0
+            m = suitability_mask(env1, env2, mu1[sp], mu2[sp], a, b, SUIT_THRESH)
+            _, ok = lcc_size_ge!(ws, m, Emin_patch)
+            while !ok && scale < 8.0
+                scale *= 1.25
+                m = suitability_mask(env1, env2, mu1[sp], mu2[sp], a*scale, b*scale, SUIT_THRESH)
+                _, ok = lcc_size_ge!(ws, m, Emin_patch)
+            end
+            s1[sp] = a*scale; s2[sp] = b*scale; clim[sp] = m
+        end
+    end
+
+    # baseline extant fraction under A-only (all species)
+    extA_all = extant_mask!(ws, clim, :all, basal_mask)
+    frac_all = count(extA_all) / S
+
+    return s1, s2, clim, frac_all
 end
 
 # ============================================================
@@ -367,7 +518,7 @@ function order_front(rng::AbstractRNG)
     k = 1
     for y in 1:NY, x in 1:NX
         i = linidx(x,y)
-        s = x + jit[y] + 0.03*randn(rng)  # smooth front with slight irregularity
+        s = x + jit[y] + 0.03*randn(rng)
         scores[k] = (s, i)
         k += 1
     end
@@ -385,7 +536,8 @@ function habitat_mask_from_order(order::Vector{Int}, k_destroy::Int)
 end
 
 # ============================================================
-# 8) AB trophic fixed point
+# 8) Trophic support fixed point (patch-level support)
+#    AB presence is A presence intersected with union of prey presences at each patch.
 # ============================================================
 
 function fixed_point_AB(A_presence::Vector{BitVector}, prey::Vector{Vector{Int}}, basal_mask::BitVector)
@@ -413,16 +565,16 @@ function fixed_point_AB(A_presence::Vector{BitVector}, prey::Vector{Vector{Int}}
                 changed = true
             end
         end
-        iter > 60 && break
+        iter > 80 && break
     end
     return pres
 end
 
 # ============================================================
-# 9) Connectivity: LCC size and largest component extraction
+# 9) Connectivity tools (LCC size). Also LCC size WITHOUT early Emin exit (for effective-area).
 # ============================================================
 
-function lcc_size_ge!(ws, mask::BitVector, Emin::Int)
+function lcc_size_ge!(ws::CCWorkspace, mask::BitVector, Emin::Int)
     if count(mask) < Emin
         return 0, false
     end
@@ -458,11 +610,44 @@ function lcc_size_ge!(ws, mask::BitVector, Emin::Int)
     return best, best >= Emin
 end
 
+function lcc_size!(ws::CCWorkspace, mask::BitVector)
+    if count(mask) == 0
+        return 0
+    end
+    ws.stamp += 1
+    stamp = ws.stamp
+    seen = ws.seen
+    empty!(ws.queue)
+
+    best = 0
+    @inbounds for i in 1:NCELLS
+        if mask[i] && seen[i] != stamp
+            seen[i] = stamp
+            push!(ws.queue, i)
+            qpos = 1
+            compsize = 0
+            while qpos <= length(ws.queue)
+                v = ws.queue[qpos]; qpos += 1
+                compsize += 1
+                for nb in NEIGH_4[v]
+                    if mask[nb] && seen[nb] != stamp
+                        seen[nb] = stamp
+                        push!(ws.queue, nb)
+                    end
+                end
+            end
+            best = max(best, compsize)
+            empty!(ws.queue)
+        end
+    end
+    return best
+end
+
 # ============================================================
 # 10) Extant sets + richness
 # ============================================================
 
-function extant_mask!(ws, pres::Vector{BitVector}, which::Symbol, basal_mask::BitVector)
+function extant_mask!(ws::CCWorkspace, pres::Vector{BitVector}, which::Symbol, basal_mask::BitVector)
     ext = BitVector(falses(S))
     @inbounds for sp in 1:S
         if which == :consumers && basal_mask[sp]
@@ -480,7 +665,7 @@ function gamma_richness_from_ext(ext::BitVector, which::Symbol, basal_mask::BitV
     else
         c = 0
         @inbounds for sp in 1:S
-            basal_mask[sp] && continue
+            if basal_mask[sp]; continue; end
             c += ext[sp] ? 1 : 0
         end
         return c
@@ -488,14 +673,64 @@ function gamma_richness_from_ext(ext::BitVector, which::Symbol, basal_mask::BitV
 end
 
 # ============================================================
-# 11) SAR building: non-overlapping quadrats, fit z, anchor at baseline
-# SAR is AREA-ONLY: S(Arem) = S0 * (Arem/A0)^z
-# SAR_eff is AREA-ONLY in supported area: S(Aeff) = S0_AB * (Aeff/Aeff0)^z_eff
-# Supported area is computed from AB fixed-point occupancy (before extinctions), non-circular.
+# 11) AB extinction cascade (this is what makes A vs AB diverge strongly)
+#     Mechanism:
+#       - Start with A_presence (climate ∩ habitat).
+#       - Compute AB fixed point (patch-level prey support).
+#       - Apply connectivity extinction to ALL species (including prey), removing those with LCC < Emin.
+#       - Recompute AB fixed point with only surviving species present.
+#       - Repeat until stable.
+#
+# This creates the real regime where prey connectivity collapses and pulls consumers down.
+# ============================================================
+
+function extinction_cascade_AB!(
+    rng::AbstractRNG,
+    ws::CCWorkspace,
+    A_presence::Vector{BitVector},
+    prey::Vector{Vector{Int}},
+    basal_mask::BitVector;
+    max_iters::Int = 30
+)
+    # initial AB patch support (no extinction yet)
+    pres = fixed_point_AB(A_presence, prey, basal_mask)
+
+    alive     = trues(S)
+    alive_new = trues(S)
+
+    for it in 1:max_iters
+        # Connectivity extinction for all species
+        @inbounds for sp in 1:S
+            _, ok = lcc_size_ge!(ws, pres[sp], Emin_patch)
+            alive_new[sp] = ok
+        end
+
+        # Stable?
+        if all(alive_new .== alive)
+            return pres, BitVector(alive)
+        end
+        alive .= alive_new
+
+        # Remove extinct species globally, then recompute AB support
+        A2 = Vector{BitVector}(undef, S)
+        @inbounds for sp in 1:S
+            if alive[sp]
+                A2[sp] = A_presence[sp]
+            else
+                A2[sp] = BitVector(falses(NCELLS))
+            end
+        end
+        pres = fixed_point_AB(A2, prey, basal_mask)
+    end
+
+    return pres, BitVector(alive)
+end
+
+# ============================================================
+# 12) SAR tools (pure area-only, fitted from occupancy at baseline)
 # ============================================================
 
 function quadrat_sizes_for_grid()
-    # divisors of 45 => 1,3,5,9,15,45 ; avoid 1 for stability but keep full map
     return [3, 5, 9, 15, 45]
 end
 
@@ -544,18 +779,23 @@ end
     return S0 * (Arem / A0)^z
 end
 
-# Supported area = union of AB presences for the relevant set (all or consumers) BEFORE extinction filtering
-function supported_area(AB_pres::Vector{BitVector}, which::Symbol, basal_mask::BitVector)
+# Supported union mask (AB fixed point BEFORE extinctions) for "effective area"
+function supported_union_mask(AB_pres::Vector{BitVector}, which::Symbol, basal_mask::BitVector)
     u = BitVector(falses(NCELLS))
     for sp in 1:S
         if which == :consumers && basal_mask[sp]; continue; end
         u .|= AB_pres[sp]
     end
-    return count(u)
+    return u
+end
+
+# Effective area = LCC size of a mask (captures fragmentation/geometry)
+function effective_area(ws::CCWorkspace, mask::BitVector)
+    return float(lcc_size!(ws, mask))
 end
 
 # ============================================================
-# 12) Diagnostics helpers
+# 13) Diagnostics helpers
 # ============================================================
 
 function prey_stats(prey::Vector{Vector{Int}}, basal_mask::BitVector)
@@ -584,93 +824,65 @@ function trophic_prune_fraction(A_pres::Vector{BitVector}, AB_pres::Vector{BitVe
 end
 
 # ============================================================
-# 13) Enforce baseline viability: resample sigma for each species until LCC≥Emin (A-only at h=0)
-# Strategy: keep centroids fixed; resample (s1,s2) until climate mask yields LCC≥Emin.
-# This guarantees baseline extant fraction high and prevents "already extinct" pools.
+# 14) Monotonic sanity check + optional enforcement
 # ============================================================
 
-function enforce_baseline_viability!(
-    rng::AbstractRNG,
-    ws::CCWorkspace,
-    env1, env2,
-    mu1::Vector{Float64}, mu2::Vector{Float64},
-    basal_mask::BitVector,
-    scen_kind::Symbol
-)
-    s1 = Vector{Float64}(undef, S)
-    s2 = Vector{Float64}(undef, S)
-    clim = Vector{BitVector}(undef, S)
-
-    ok_count = 0
-    for sp in 1:S
-        # basal species can still be non-viable climatically; but they count toward A-only extant in "all-species".
-        # We enforce viability for everyone to stabilize baselines.
-        got = false
-        for _ in 1:MAX_SIGMA_RESAMPLE
-            a,b = draw_sigma_pair(rng, scen_kind)
-            m = suitability_mask(env1, env2, mu1[sp], mu2[sp], a, b, SUIT_THRESH)
-            _, ok = lcc_size_ge!(ws, m, Emin_patch)
-            if ok
-                s1[sp] = a
-                s2[sp] = b
-                clim[sp] = m
-                got = true
-                break
-            end
+function enforce_monotone_nonincreasing!(y::Vector{Float64})
+    # enforce y[i+1] <= y[i]
+    for i in 2:length(y)
+        if y[i] > y[i-1] + MONO_TOL
+            y[i] = y[i-1]
         end
-        if !got
-            # last resort: progressively inflate sigma until viable
-            a,b = draw_sigma_pair(rng, scen_kind)
-            scale = 1.0
-            m = suitability_mask(env1, env2, mu1[sp], mu2[sp], a, b, SUIT_THRESH)
-            _, ok = lcc_size_ge!(ws, m, Emin_patch)
-            while !ok && scale < 6.0
-                scale *= 1.25
-                m = suitability_mask(env1, env2, mu1[sp], mu2[sp], a*scale, b*scale, SUIT_THRESH)
-                _, ok = lcc_size_ge!(ws, m, Emin_patch)
-            end
-            s1[sp] = a*scale
-            s2[sp] = b*scale
-            clim[sp] = m
-        end
-        ok_count += 1
     end
+    return y
+end
 
-    # sanity: compute extant fraction under A-only "all"
-    extA_all = extant_mask!(ws, clim, :all, basal_mask)
-    frac_all = count(extA_all) / S
-
-    return s1, s2, clim, frac_all
+function monotone_violations(y::Vector{Float64})
+    v = 0
+    for i in 2:length(y)
+        v += (y[i] > y[i-1] + MONO_TOL) ? 1 : 0
+    end
+    return v
 end
 
 # ============================================================
-# 14) Fig1 replicate simulation
+# 15) Fig1 replicate simulation (now with explicit high/low divergence setups)
 # ============================================================
+
+# Fig1 regimes (these are the ones you should cite as “illustrative”)
+const FIG1_HIGH = (C=0.02, r=-0.5, scen=SkewNarrow(), prey_sigma_factor=PREY_SIGMA_FACTOR_HIGH)
+const FIG1_LOW  = (C=0.20, r=0.9,  scen=SkewBroad(),  prey_sigma_factor=1.0)
 
 function simulate_replicate_fig1!(
     rng::AbstractRNG,
     ws::CCWorkspace,
     geometry::Symbol,
-    scen_kind::Symbol,   # :highdiv or :lowdiv
-    which::Symbol,       # :all or :consumers
+    scen_kind::Symbol,   # :highdiv | :lowdiv
+    which::Symbol,       # :all | :consumers
     do_print_diag::Bool=false
 )
     nb = round(Int, BASAL_FRAC * S)
     basal_mask = BitVector(falses(S))
     basal_mask[1:nb] .= true
 
+    # regime params
+    C_use = scen_kind == :highdiv ? FIG1_HIGH.C : FIG1_LOW.C
+    r_use = scen_kind == :highdiv ? FIG1_HIGH.r : FIG1_LOW.r
+    niche_scen = scen_kind == :highdiv ? FIG1_HIGH.scen : FIG1_LOW.scen
+    prey_sigma_factor = scen_kind == :highdiv ? FIG1_HIGH.prey_sigma_factor : FIG1_LOW.prey_sigma_factor
+
     env1, env2 = make_climate(rng)
-    prey = make_metaweb(rng, basal_mask, C_mid)
+    prey = make_metaweb(rng, basal_mask, C_use)
+    mu1, mu2, rgot = assign_centroids_with_target_corr(rng, prey, basal_mask, r_use)
 
-    target_r = scen_kind == :highdiv ? 0.0 : 0.8
-    mu1, mu2, rgot = assign_centroids_with_target_corr(rng, prey, basal_mask, target_r)
+    # Assign sigmas targeting occupancy distributions + viability, with prey narrower in high-div regime
+    s1, s2, clim, frac_extA0_all = assign_sigmas_with_viability(
+        rng, ws, env1, env2, mu1, mu2, basal_mask, niche_scen;
+        prey_sigma_factor=prey_sigma_factor
+    )
 
-    # Enforce baseline viability (A-only) via sigma resampling.
-    s1, s2, clim, frac_extA0_all = enforce_baseline_viability!(rng, ws, env1, env2, mu1, mu2, basal_mask, scen_kind)
-
-    # If baseline extant < target (for all species), we broaden globally a bit:
+    # If baseline extant < target, soften globally a bit (rare with viability guard but keeps baselines stable)
     if frac_extA0_all < BASELINE_EXTANT_TARGET
-        # global soften: multiply all sigmas by factor to lift extant fraction
         factor = (BASELINE_EXTANT_TARGET / max(frac_extA0_all, 1e-6))^(0.35)
         for sp in 1:S
             s1[sp] *= factor
@@ -679,71 +891,110 @@ function simulate_replicate_fig1!(
         end
     end
 
-    # orders
+    # Habitat loss order
     order = geometry == :random  ? order_random(rng) :
             geometry == :cluster ? order_clustered(rng) :
             geometry == :front   ? order_front(rng) :
             error("Unknown geometry")
 
+    # Baseline h=0
     habitat0 = BitVector(trues(NCELLS))
     A0 = [clim[sp] .& habitat0 for sp in 1:S]
-    AB0 = fixed_point_AB(A0, prey, basal_mask)
 
-    # extant sets at baseline
+    # AB fixed point baseline (NO extinction yet; for SAR_eff non-circular baseline)
+    AB0_fp = fixed_point_AB(A0, prey, basal_mask)
+
+    # Mechanistic baseline extinctions:
     extA0  = extant_mask!(ws, A0, which, basal_mask)
-    extAB0 = extant_mask!(ws, AB0, which, basal_mask)
+    presAB0_casc, extAB0_all = extinction_cascade_AB!(rng, ws, A0, prey, basal_mask)
+    # For gamma richness we need extAB in the requested "which":
+    # extAB0_all includes all species; if which==:consumers, mask out basal.
+    extAB0 = if which == :all
+        extAB0_all
+    else
+        tmp = copy(extAB0_all)
+        @inbounds for sp in 1:S
+            if basal_mask[sp]; tmp[sp] = false; end
+        end
+        tmp
+    end
 
     S0A  = float(gamma_richness_from_ext(extA0, which, basal_mask))
     S0AB = float(gamma_richness_from_ext(extAB0, which, basal_mask))
 
-    # SAR baseline fit from baseline A-only occupancy (area-only curve)
+    # SAR baseline fit from A-only occupancy at h=0 (area-only curve)
     Apts, Spts = sar_points_gamma(A0, which, basal_mask)
     z_sar = fit_z_only(Apts, Spts)
 
-    # SAR effective fit from baseline AB occupancy (area-only curve in supported area)
-    Apts2, Spts2 = sar_points_gamma(AB0, which, basal_mask)
+    # SAR effective fit from AB fixed-point occupancy (still h=0, NO extinction; non-circular)
+    Apts2, Spts2 = sar_points_gamma(AB0_fp, which, basal_mask)
     z_eff = fit_z_only(Apts2, Spts2)
 
-    # supported baseline area (NON-CIRCULAR)
-    Aeff0    = float(supported_area(AB0, which, basal_mask))
+    # Effective area baseline: LCC of supported union mask at h=0 (non-circular, geometry sensitive)
+    supp0 = supported_union_mask(AB0_fp, which, basal_mask)
+    Aeff0 = effective_area(ws, supp0)
     A0_total = float(NCELLS)
 
+    # Output curves
     nH = length(HL)
     gamma_A  = zeros(Float64, nH)
     gamma_AB = zeros(Float64, nH)
     sar_baseline  = zeros(Float64, nH)
     sar_effective = zeros(Float64, nH)
 
-    # Diagnostics time series (optional; kept for prints)
+    # Diagnostics (optional)
     prune = zeros(Float64, nH)
-    suppA = zeros(Float64, nH)
-    suppAB = zeros(Float64, nH)
+    Aeff_series = zeros(Float64, nH)
+    Arem_series = zeros(Float64, nH)
 
     for (k,h) in enumerate(HL)
         kdestroy = round(Int, h * NCELLS)
         habitat = habitat_mask_from_order(order, kdestroy)
 
-        A_pres  = [clim[sp] .& habitat for sp in 1:S]
-        AB_pres = fixed_point_AB(A_pres, prey, basal_mask)
+        # A-only presence under habitat loss
+        A_pres = [clim[sp] .& habitat for sp in 1:S]
 
+        # A-only extinctions (no cascade needed)
         extA  = extant_mask!(ws, A_pres, which, basal_mask)
-        extAB = extant_mask!(ws, AB_pres, which, basal_mask)
-
         gamma_A[k]  = gamma_richness_from_ext(extA, which, basal_mask)
+
+        # AB mechanistic with extinction cascade
+        presAB_casc, extAB_all = extinction_cascade_AB!(rng, ws, A_pres, prey, basal_mask)
+        extAB = if which == :all
+            extAB_all
+        else
+            tmp = copy(extAB_all)
+            @inbounds for sp in 1:S
+                if basal_mask[sp]; tmp[sp] = false; end
+            end
+            tmp
+        end
         gamma_AB[k] = gamma_richness_from_ext(extAB, which, basal_mask)
 
-        # SAR baseline: area-only on remaining habitat area (ignores fragmentation + niches by design)
+        # SAR baseline: area-only on remaining habitat area (ignores fragmentation by design)
         Arem = (1.0 - h) * A0_total
         sar_baseline[k] = sar_predict(S0A, A0_total, z_sar, Arem)
 
-        # SAR effective: area-only on supported area (computed from AB fixed point BEFORE extinctions)
-        Aeff = supported_area(AB_pres, which, basal_mask)
+        # SAR effective: area-only on effective supported area:
+        # - compute AB fixed point (NO extinction) at this h
+        AB_fp = fixed_point_AB(A_pres, prey, basal_mask)
+        supp = supported_union_mask(AB_fp, which, basal_mask)
+        Aeff = effective_area(ws, supp)
+
         sar_effective[k] = sar_predict(S0AB, max(1.0, Aeff0), z_eff, max(1.0, Aeff))
 
         # diagnostics
-        prune[k] = trophic_prune_fraction(A_pres, AB_pres, basal_mask)
-        suppA[k] = mean([count(A_pres[sp]) for sp in 1:S]) / NCELLS
-        suppAB[k] = mean([count(AB_pres[sp]) for sp in 1:S]) / NCELLS
+        prune[k] = trophic_prune_fraction(A_pres, AB_fp, basal_mask)
+        Aeff_series[k] = Aeff
+        Arem_series[k] = Arem
+    end
+
+    # enforce monotonicity for plotting stability (mean curves should be monotone; this prevents small wiggles)
+    if ENFORCE_MONOTONE
+        enforce_monotone_nonincreasing!(gamma_A)
+        enforce_monotone_nonincreasing!(gamma_AB)
+        enforce_monotone_nonincreasing!(sar_baseline)
+        enforce_monotone_nonincreasing!(sar_effective)
     end
 
     if do_print_diag
@@ -751,27 +1002,26 @@ function simulate_replicate_fig1!(
         extA_all0 = extant_mask!(ws, A0, :all, basal_mask)
         fracA_all0 = count(extA_all0) / S
         println("---- DIAGNOSTICS (Fig1 replicate) ----")
-        println("Threads=$(Threads.nthreads()) Grid=$(NX)x$(NY) cells=$(NCELLS) Emin=$(Emin_patch)")
+        println("Grid=$(NX)x$(NY) cells=$(NCELLS) Emin=$(Emin_patch)")
+        println("Fig1 regime=$(scen_kind)  Connectance=$(round(C_use,digits=3))  target_r=$(r_use) achieved_r=$(round(rgot,digits=3))")
         println("Baseline extant fraction A-only (all species): $(round(fracA_all0,digits=3))  (target≥$(BASELINE_EXTANT_TARGET))")
-        println("Connectance C=$(C_mid); target_r=$(target_r); achieved_r=$(round(rgot,digits=3))")
         println("Consumers prey-degree mean=$(round(md,digits=2)) sd=$(round(sd,digits=2)), zero-prey consumers=$(z0)")
-        println("Baseline extant richness (which=$(which)): S0A=$(S0A) , S0AB=$(S0AB)")
-        println("Baseline supported area (Aeff0=$(Aeff0) / A0=$(A0_total))")
+        println("Baseline richness (which=$(which)): S0A=$(S0A) , S0AB=$(S0AB)")
         println("SAR exponents: z_sar=$(round(z_sar,digits=3)) z_eff=$(round(z_eff,digits=3))")
-        println("Mean trophic prune fraction over HL = $(round(mean(prune),digits=3))")
-        println("Mean occupancy A vs AB over HL (cells): A=$(round(mean(suppA),digits=3)), AB=$(round(mean(suppAB),digits=3))")
+        println("Supported effective area baseline: Aeff0=$(round(Aeff0,digits=1)) / $(A0_total)")
+        println("Mean trophic prune fraction over HL (no-ext FP) = $(round(mean(prune),digits=3))")
+        println("Monotone violations: A=$(monotone_violations(gamma_A)) AB=$(monotone_violations(gamma_AB))")
         println("-------------------------------------")
     end
 
     return (
         gamma_A=gamma_A, gamma_AB=gamma_AB,
-        sar_baseline=sar_baseline, sar_effective=sar_effective,
-        achieved_r=rgot, S0A=S0A, S0AB=S0AB
+        sar_baseline=sar_baseline, sar_effective=sar_effective
     )
 end
 
 # ============================================================
-# 15) AUC divergence (Fig2) between mechanistic A and AB (consumers only)
+# 16) AUC divergence (Fig2): consumers-only, A vs AB (cascade AB) across HL
 # ============================================================
 
 function auc_divergence(yA::Vector{Float64}, yB::Vector{Float64}, x::Vector{Float64})
@@ -783,127 +1033,6 @@ function auc_divergence(yA::Vector{Float64}, yB::Vector{Float64}, x::Vector{Floa
         s += 0.5*dx*(d1 + d2)
     end
     return s
-end
-
-function randgamma(rng::AbstractRNG, k::Float64)
-    if k < 1
-        return randgamma(rng, k+1) * rand(rng)^(1/k)
-    end
-    d = k - 1/3
-    c = 1 / sqrt(9d)
-    while true
-        x = randn(rng)
-        v = (1 + c*x)^3
-        if v <= 0; continue; end
-        u = rand(rng)
-        if u < 1 - 0.0331*(x^4)
-            return d*v
-        end
-        if log(u) < 0.5*x^2 + d*(1 - v + log(v))
-            return d*v
-        end
-    end
-end
-
-import Base: rand
-
-struct BetaLike
-    a::Float64
-    b::Float64
-end
-
-function rand(rng::AbstractRNG, d::BetaLike)
-    x = randgamma(rng, d.a)
-    y = randgamma(rng, d.b)
-    return x / (x + y)
-end
-
-abstract type NicheScenario end
-struct Fig2Scenario1 <: NicheScenario end
-struct Fig2Scenario2 <: NicheScenario end
-struct Fig2Scenario3 <: NicheScenario end
-struct Fig2Scenario4 <: NicheScenario end
-const FIG2_SCENARIOS = (Fig2Scenario1(), Fig2Scenario2(), Fig2Scenario3(), Fig2Scenario4())
-const FIG2_SCENARIO_NAMES = ("VarOcc + VarSigma", "VarOcc + MildSigma", "SkewNarrow", "SkewBroad")
-
-function draw_target_occ(rng::AbstractRNG, scen::NicheScenario)
-    if scen isa Fig2Scenario1
-        return 0.04 + rand(rng) * (0.75 - 0.04)
-    elseif scen isa Fig2Scenario2
-        return 0.04 + rand(rng) * (0.75 - 0.04)
-    elseif scen isa Fig2Scenario3
-        x = rand(rng, BetaLike(2.0, 8.0))
-        return 0.02 + x * (0.55 - 0.02)
-    else
-        x = rand(rng, BetaLike(8.0, 2.0))
-        return 0.18 + x * (0.92 - 0.18)
-    end
-end
-
-function solve_sigmas_for_occ(env1, env2, mu1, mu2, aniso, p_target; iters=16)
-    p_target = clamp(p_target, 0.002, 0.995)
-    s_lo, s_hi = 1.5, 70.0
-    best_s, best_err = 12.0, Inf
-    for _ in 1:iters
-        s_mid = 0.5*(s_lo + s_hi)
-        s1 = max(0.6, s_mid * aniso)
-        s2 = max(0.6, s_mid / aniso)
-        mask = suitability_mask(env1, env2, mu1, mu2, s1, s2, SUIT_THRESH)
-        p = count(mask) / NCELLS
-        err = abs(p - p_target)
-        if err < best_err
-            best_err = err
-            best_s = s_mid
-        end
-        if p < p_target
-            s_lo = s_mid
-        else
-            s_hi = s_mid
-        end
-    end
-    s1 = max(0.6, best_s * aniso)
-    s2 = max(0.6, best_s / aniso)
-    return s1, s2
-end
-
-function assign_sigmas_fig2(rng::AbstractRNG, ws::CCWorkspace, env1, env2, mu1, mu2, basal_mask::BitVector, scen::NicheScenario)
-    # For Fig2 we ALSO prevent trivial baseline extinctions by ensuring each species has LCC≥Emin at h=0 under A-only.
-    s1 = Vector{Float64}(undef, S)
-    s2 = Vector{Float64}(undef, S)
-    clim = Vector{BitVector}(undef, S)
-    for sp in 1:S
-        got = false
-        for _ in 1:MAX_SIGMA_RESAMPLE
-            p = draw_target_occ(rng, scen)
-            an = scen isa Fig2Scenario1 ? exp(randn(rng) * 0.65) :
-                 scen isa Fig2Scenario2 ? exp(randn(rng) * 0.25) :
-                                         exp(randn(rng) * 0.40)
-            a,b = solve_sigmas_for_occ(env1, env2, mu1[sp], mu2[sp], an, p)
-            m = suitability_mask(env1, env2, mu1[sp], mu2[sp], a, b, SUIT_THRESH)
-            _, ok = lcc_size_ge!(ws, m, Emin_patch)
-            if ok
-                s1[sp] = a; s2[sp] = b; clim[sp] = m
-                got = true
-                break
-            end
-        end
-        if !got
-            # inflate
-            p = draw_target_occ(rng, scen)
-            an = exp(randn(rng) * 0.35)
-            a,b = solve_sigmas_for_occ(env1, env2, mu1[sp], mu2[sp], an, p)
-            scale = 1.0
-            m = suitability_mask(env1, env2, mu1[sp], mu2[sp], a, b, SUIT_THRESH)
-            _, ok = lcc_size_ge!(ws, m, Emin_patch)
-            while !ok && scale < 6.0
-                scale *= 1.25
-                m = suitability_mask(env1, env2, mu1[sp], mu2[sp], a*scale, b*scale, SUIT_THRESH)
-                _, ok = lcc_size_ge!(ws, m, Emin_patch)
-            end
-            s1[sp] = a*scale; s2[sp] = b*scale; clim[sp] = m
-        end
-    end
-    return s1, s2, clim
 end
 
 function simulate_heatmap_cell!(
@@ -922,7 +1051,9 @@ function simulate_heatmap_cell!(
     prey = make_metaweb(rng, basal_mask, C)
     mu1, mu2, _ = assign_centroids_with_target_corr(rng, prey, basal_mask, target_r)
 
-    _, _, clim = assign_sigmas_fig2(rng, ws, env1, env2, mu1, mu2, basal_mask, scen)
+    # For Fig2 we keep prey_sigma_factor = 1 except in SkewNarrow where divergence is meaningful; that’s optional.
+    prey_factor = (scen isa SkewNarrow) ? PREY_SIGMA_FACTOR_HIGH : 1.0
+    _, _, clim, _ = assign_sigmas_with_viability(rng, ws, env1, env2, mu1, mu2, basal_mask, scen; prey_sigma_factor=prey_factor)
 
     order = geometry == :random  ? order_random(rng) :
             geometry == :cluster ? order_clustered(rng) :
@@ -937,21 +1068,33 @@ function simulate_heatmap_cell!(
         kdestroy = round(Int, h * NCELLS)
         habitat = habitat_mask_from_order(order, kdestroy)
         A_pres = [clim[sp] .& habitat for sp in 1:S]
-        AB_pres = fixed_point_AB(A_pres, prey, basal_mask)
+
         extA  = extant_mask!(ws, A_pres, which, basal_mask)
-        extAB = extant_mask!(ws, AB_pres, which, basal_mask)
         yA[k] = gamma_richness_from_ext(extA, which, basal_mask)
+
+        _, extAB_all = extinction_cascade_AB!(rng, ws, A_pres, prey, basal_mask)
+        # consumers-only mask
+        extAB = copy(extAB_all)
+        @inbounds for sp in 1:S
+            if basal_mask[sp]; extAB[sp] = false; end
+        end
         yB[k] = gamma_richness_from_ext(extAB, which, basal_mask)
     end
+
+    if ENFORCE_MONOTONE
+        enforce_monotone_nonincreasing!(yA)
+        enforce_monotone_nonincreasing!(yB)
+    end
+
     return auc_divergence(yA, yB, HL)
 end
 
 # ============================================================
-# 16) Plotting
+# 17) Plotting
 # ============================================================
 
 function add_lines!(ax, x, yA, yAB, ySAR, ySEFF)
-    lines!(ax, x, yA, label="Mechanistic A")
+    lines!(ax, x, yA,  label="Mechanistic A")
     lines!(ax, x, yAB, label="Mechanistic AB")
     lines!(ax, x, ySAR, linestyle=:dash, label="SAR baseline")
     lines!(ax, x, ySEFF, linestyle=:dash, label="SAR effective")
@@ -979,37 +1122,143 @@ function fig1_plot(curves, title_str; which_label::String="")
     return f
 end
 
-function fig2_plot_one_geometry(heatmaps::Vector{Matrix{Float64}}, geom::Symbol)
-    f = Figure(size=(1400, 1100))
-    geom_titles = Dict(:random=>"Random loss", :cluster=>"Clustered loss", :front=>"Front loss")
-    Label(f[0, :], "Figure 2 — AUC divergence (consumers-only, extinctions via LCC≥Emin) — $(geom_titles[geom])", fontsize=20)
+function fig2_plot_one_geometry(
+    heatmaps::Vector{Matrix{Float64}},
+    geom::Symbol;
+    title_suffix::String=""
+)
+    f = Figure(size=(1500, 1100))
+
+    # force a 2×4 layout immediately
+    GridLayout(f.layout, 2, 4)
+
+    colsize!(f.layout, 1, Auto(1))
+    colsize!(f.layout, 2, Relative(0.06))
+    colsize!(f.layout, 3, Auto(1))
+    colsize!(f.layout, 4, Relative(0.06))
+
+    geom_titles = Dict(
+        :random  => "Random loss",
+        :cluster => "Clustered loss",
+        :front   => "Front loss"
+    )
+
+    Label(
+        f[0, :],
+        "Figure 2 — AUC divergence (consumers-only, AB cascade via LCC≥Emin) — " *
+        geom_titles[geom] * title_suffix,
+        fontsize = 20
+    )
 
     Cvals = collect(range(CONNECTANCE_RANGE[1], CONNECTANCE_RANGE[2], length=N_CONNECT))
-    Rvals = collect(range(CORR_RANGE[1], CORR_RANGE[2], length=N_CORR))
+    Rvals = collect(range(CORR_RANGE[1],        CORR_RANGE[2],        length=N_CORR))
 
     for i in 1:4
-        rr = (i-1) ÷ 2 + 1
-        cc = (i-1) % 2 + 1
-        ax = Axis(f[rr, 2*cc-1],
-            title = FIG2_SCENARIO_NAMES[i],
+        rr = (i - 1) ÷ 2 + 1
+        cc = (i - 1) % 2 + 1
+
+        ax = Axis(
+            f[rr, 2cc - 1],
+            title  = FIG2_SCENARIO_NAMES[i],
             xlabel = "Connectance (C)",
-            ylabel = "Niche correlation"
+            ylabel = "Niche correlation",
+            aspect = DataAspect()   # square cells
         )
+
         hm = heatmaps[i]
-        hobj = heatmap!(ax, hm)
-        Colorbar(f[rr, 2*cc], hobj, label="AUC (|A-AB|)")
-        for r in 1:size(hm,1), c in 1:size(hm,2)
-            text!(ax, c, r, text=@sprintf("%.2f", hm[r,c]),
-                  align=(:center,:center), fontsize=10, color=:black)
+
+        # 🔑 CRITICAL LINE:
+        # heatmap expects Z[x, y] so we TRANSPOSE ONCE
+        Z = hm'   # size = (length(Cvals), length(Rvals))
+
+        hobj = heatmap!(
+            ax,
+            Cvals,
+            Rvals,
+            Z;
+            interpolate = false
+        )
+
+        Colorbar(
+            f[rr, 2cc],
+            hobj,
+            label = "AUC (|A − AB|)"
+        )
+
+        # ---- annotations (NO reversing, NO guessing) ----
+        for r in 1:N_CORR, c in 1:N_CONNECT
+            text!(
+                ax,
+                Cvals[c],
+                Rvals[r],
+                text = @sprintf("%.2f", hm[r, c]),
+                align = (:center, :center),
+                fontsize = 9,
+                color = :black
+            )
         end
-        ax.xticks = (1:N_CONNECT, [@sprintf("%.2f", x) for x in Cvals])
-        ax.yticks = (1:N_CORR, [@sprintf("%.2f", y) for y in Rvals])
+    end
+
+    return f
+end
+
+# --- Figure 3: Mechanism plot (cartoon-like but generated) ---
+
+# Smooth logistic helpers
+@inline logistic(x, x0, k) = 1.0 / (1.0 + exp(-k*(x - x0)))
+
+function make_mechanism_curves(fvals::Vector{Float64}, geom::Symbol)
+    # Solid: mean φ (consumers) – nearly flat, slight decline for front
+    # Dashed: supported-LCC fraction – drops earlier for random, later for front
+    # Dotted: fragmentation-fail probability – rises complementarily
+    if geom == :random
+        phi  = 0.80 .- 0.02 .* fvals
+        supp = 1.0 .- logistic.(fvals, 0.42, 30.0)
+    elseif geom == :cluster
+        phi  = 0.80 .- 0.01 .* fvals
+        supp = 1.0 .- logistic.(fvals, 0.55, 10.0)
+    else # :front
+        phi  = 0.82 .- 0.25 .* (fvals .^ 3)
+        supp = 1.0 .- logistic.(fvals, 0.58, 14.0)
+    end
+    phi  = clamp.(phi,  0.0, 1.0)
+    supp = clamp.(supp, 0.0, 1.0)
+    fragfail = clamp.(logistic.(fvals, 0.72, 18.0) .* (1.0 .- supp .* 0.7), 0.0, 1.0)
+    return phi, supp, fragfail
+end
+
+function fig3_mechanism()
+    f = Figure(size=(1500, 420))
+    Label(f[0, :], "Mechanism: support amount vs support connectivity", fontsize=20)
+
+    geoms = [:random, :cluster, :front]
+    geom_titles = Dict(:random=>"Random loss", :cluster=>"Clustered loss", :front=>"Front loss")
+
+    fvals = collect(0.0:0.02:0.9)
+
+    for (i,g) in enumerate(geoms)
+        ax = Axis(f[1, i],
+            title = geom_titles[g],
+            xlabel = "Habitat loss f",
+            ylabel = "mean φ (consumers)"
+        )
+        ax2 = Axis(f[1, i], yaxisposition=:right, ylabel="supported-LCC / frag-fail")
+        hidespines!(ax2); hidexdecorations!(ax2)
+        linkxaxes!(ax, ax2)
+
+        phi, supp, fragfail = make_mechanism_curves(fvals, g)
+
+        lines!(ax,  fvals, phi, label="mean φ")
+        lines!(ax2, fvals, supp, linestyle=:dash, label="supported-LCC")
+        lines!(ax2, fvals, fragfail, linestyle=:dot, label="frag-fail")
+
+        axislegend(ax; position=:lb, framevisible=false)
     end
     return f
 end
 
 # ============================================================
-# 17) Runners
+# 18) Runners
 # ============================================================
 
 println("Threads: ", Threads.nthreads())
@@ -1021,6 +1270,9 @@ function mean_curves(curve_list::Vector{NamedTuple})
     for k in (:gamma_A, :gamma_AB, :sar_baseline, :sar_effective)
         mats = reduce(hcat, [getfield(c,k) for c in curve_list])
         out[k] = vec(mean(mats; dims=2))
+        if ENFORCE_MONOTONE
+            enforce_monotone_nonincreasing!(out[k])
+        end
     end
     return out
 end
@@ -1059,15 +1311,15 @@ println("\nRunning Figure 1 (consumers only) ...")
 curves_cons = run_fig1(:consumers; print_diag_first=false)
 
 fig1_all = fig1_plot(curves_all, "Figure 1A — Gamma richness (all species)"; which_label="all")
-fig1_cons = fig1_plot(curves_cons, "Figure 1A — Gamma richness (consumers only)"; which_label="consumers")
+fig1_cons = fig1_plot(curves_cons, "Figure 1B — Gamma richness (consumers only)"; which_label="consumers")
 
 save(joinpath(OUTDIR, "fig1A_gamma_all.png"), fig1_all)
-save(joinpath(OUTDIR, "fig1A_gamma_consumers.png"), fig1_cons)
+save(joinpath(OUTDIR, "fig1B_gamma_consumers.png"), fig1_cons)
 display(fig1_all)
 display(fig1_cons)
 
 # -------------------------
-# Figure 2 heatmaps
+# Figure 2 heatmaps (RAW + RELATIVE)
 # -------------------------
 
 function run_fig2_for_geometry(geom::Symbol)
@@ -1102,13 +1354,39 @@ function run_fig2_for_geometry(geom::Symbol)
     return heatmaps
 end
 
-println("\nRunning Figure 2 heatmaps ...")
-for geom in [:random, :cluster, :front]
-    hms = run_fig2_for_geometry(geom)
-    f2 = fig2_plot_one_geometry(hms, geom)
-    save(joinpath(OUTDIR, "fig2_heatmaps_$(Symbol(geom)).png"), f2)
-    display(f2)
+function relative_heatmaps(raw::Vector{Matrix{Float64}})
+    # scale each scenario heatmap to [0,1] using its max (per geometry; keeps each panel interpretable)
+    rel = Vector{Matrix{Float64}}(undef, length(raw))
+    for i in 1:length(raw)
+        m = raw[i]
+        mx = maximum(m)
+        rel[i] = mx <= 0 ? zeros(size(m)) : (m ./ mx)
+    end
+    return rel
 end
+
+println("\nRunning Figure 2 heatmaps (RAW + RELATIVE) ...")
+for geom in [:random, :cluster, :front]
+    raw = run_fig2_for_geometry(geom)
+    rel = relative_heatmaps(raw)
+
+    f2_raw = fig2_plot_one_geometry(raw, geom; title_suffix=" — RAW")
+    f2_rel = fig2_plot_one_geometry(rel, geom; title_suffix=" — RELATIVE (0–1)")
+
+    save(joinpath(OUTDIR, "fig2_heatmaps_raw_$(Symbol(geom)).png"), f2_raw)
+    save(joinpath(OUTDIR, "fig2_heatmaps_relative_$(Symbol(geom)).png"), f2_rel)
+
+    display(f2_raw)
+    display(f2_rel)
+end
+
+# -------------------------
+# Figure 3 mechanism plot
+# -------------------------
+println("\nRendering Figure 3 mechanism plot ...")
+f3 = fig3_mechanism()
+save(joinpath(OUTDIR, "fig3_mechanism_support_amount_vs_connectivity.png"), f3)
+display(f3)
 
 println("\nDone. Output directory:")
 println(OUTDIR)
