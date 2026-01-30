@@ -97,8 +97,8 @@ const MAX_SIGMA_RESAMPLE = 40
 const N_MODULES = 5
 
 # Output folder
-ts = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
-OUTDIR = joinpath(pwd(), "figures_traffic_extinction_structured_" * ts)
+# ts = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
+OUTDIR = joinpath(pwd(), "figures_trophic_extinction_structured_")
 isdir(OUTDIR) || mkpath(OUTDIR)
 
 # Global seed
@@ -1226,8 +1226,20 @@ function fig1_plot(curves, title_str; which_label::String="")
 end
 function fig2_plot_one_geometry(heatmaps::Vector{Matrix{Float64}}, geom::Symbol)
     f = Figure(size=(1400, 1100))
+
     geom_titles = Dict(:random=>"Random loss", :cluster=>"Clustered loss", :front=>"Front loss")
-    Label(f[0, :], "Figure 2 — AUC divergence (consumers-only, extinctions via LCC≥Emin) — $(geom_titles[geom])", fontsize=20)
+    Label(
+        f[0, :],
+        "Figure 2 — AUC divergence (consumers-only, extinctions via LCC≥Emin) — $(geom_titles[geom])",
+        fontsize = 20
+    )
+
+    # ✅ CREATE SUBLAYOUT WITH EXPLICIT COLUMN WIDTHS (NO colsize!)
+    gl = GridLayout(
+        f[1, 1];
+        widths  = (Auto(1), Fixed(45), Auto(1), Fixed(45)),
+        heights = (Auto(1), Auto(1))
+    )
 
     Cvals = collect(range(CONNECTANCE_RANGE[1], CONNECTANCE_RANGE[2], length=N_CONNECT))
     Rvals = collect(range(CORR_RANGE[1], CORR_RANGE[2], length=N_CORR))
@@ -1236,33 +1248,42 @@ function fig2_plot_one_geometry(heatmaps::Vector{Matrix{Float64}}, geom::Symbol)
     y = 1:N_CORR
 
     for i in 1:4
-        rr = (i-1) ÷ 2 + 1
-        cc = (i-1) % 2 + 1
-        ax = Axis(f[rr, 2*cc-1],
-            title = FIG2_SCENARIO_NAMES[i],
+        rr = (i - 1) ÷ 2 + 1
+        cc = (i - 1) % 2 + 1
+
+        ax = Axis(
+            gl[rr, 2cc - 1],
+            title  = FIG2_SCENARIO_NAMES[i],
             xlabel = "Connectance (C)",
-            ylabel = "Niche correlation"
+            ylabel = "Niche correlation",
+            aspect = DataAspect()
         )
 
-        hm = heatmaps[i]                 # (N_CORR, N_CONNECT)
-        z  = permutedims(hm)             # (N_CONNECT, N_CORR)
+        hm = heatmaps[i]          # (N_CORR, N_CONNECT)
+        z  = permutedims(hm)      # (N_CONNECT, N_CORR)
 
-        hobj = heatmap!(ax, x, y, z)
-        Colorbar(f[rr, 2*cc], hobj, label="AUC (|A-AB|)")
+        hobj = heatmap!(ax, x, y, z; interpolate=false)
 
-        # ticks: indices -> parameter values
+        Colorbar(
+            gl[rr, 2cc],
+            hobj,
+            label = "AUC (|A − AB|)"
+        )
+
         ax.xticks = (x, [@sprintf("%.2f", v) for v in Cvals])
         ax.yticks = (y, [@sprintf("%.2f", v) for v in Rvals])
 
-        # numeric labels: careful with transpose
         for r in 1:N_CORR, c in 1:N_CONNECT
-            text!(ax, c, r,
-                text=@sprintf("%.2f", hm[r,c]),
-                align=(:center,:center),
-                fontsize=10,
-                color=:black)
+            text!(
+                ax, c, r,
+                text = @sprintf("%.2f", hm[r, c]),
+                align = (:center, :center),
+                fontsize = 9,
+                color = :black
+            )
         end
     end
+
     return f
 end
 
