@@ -1045,12 +1045,12 @@ end
 # ============================================================
 # 12) MAIN
 # ============================================================
-store, Cvals, Rvals = sweep_all()
+# store, Cvals, Rvals = sweep_all()
 using Serialization
 
-cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn.jls")
-serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
-println("Saved sweep cache to: ", cache_path)
+# cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn.jls")
+# serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
+# println("Saved sweep cache to: ", cache_path)
 
 cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn.jls")
 data = deserialize(cache_path)
