@@ -596,7 +596,7 @@ end
 # 11) Scenario design (10 scenarios ordered from "highest divergence" to "lowest")
 # ============================================================
 
-struct Scenario
+struct Scenarioo
     id::Int
     name::String
     C::Float64
@@ -607,21 +607,21 @@ struct Scenario
 end
 
 # You can edit these to match *exactly* your “past 10 scenarios”.
-const SCENARIOS10 = Scenario[
-    Scenario(1,  "MaxDiv 1", 0.03, -0.40, :skew_narrow,       :high),
-    Scenario(2,  "MaxDiv 2", 0.05, -0.25, :skew_narrow,       :high),
-    Scenario(3,  "HighDiv 3",0.07, -0.10, :varwide,           :high),
-    Scenario(4,  "HighDiv 4",0.09,  0.05, :varwide,           :mild),
-    Scenario(5,  "MidDiv 5", 0.11,  0.20, :varwide_mildsigma, :mild),
-    Scenario(6,  "MidDiv 6", 0.13,  0.35, :mid,               :mild),
-    Scenario(7,  "LowDiv 7", 0.15,  0.50, :mid,               :low),
-    Scenario(8,  "LowDiv 8", 0.18,  0.65, :skew_broad,        :low),
-    Scenario(9,  "MinDiv 9", 0.21,  0.78, :skew_broad,        :low),
-    Scenario(10, "MinDiv 10",0.24,  0.88, :skew_broad,        :low),
+const SCENARIOS10 = Scenarioo[
+    Scenarioo(1,  "MaxDiv 1", 0.03, -0.40, :skew_narrow,       :high),
+    Scenarioo(2,  "MaxDiv 2", 0.05, -0.25, :skew_narrow,       :high),
+    Scenarioo(3,  "HighDiv 3",0.07, -0.10, :varwide,           :high),
+    Scenarioo(4,  "HighDiv 4",0.09,  0.05, :varwide,           :mild),
+    Scenarioo(5,  "MidDiv 5", 0.11,  0.20, :varwide_mildsigma, :mild),
+    Scenarioo(6,  "MidDiv 6", 0.13,  0.35, :mid,               :mild),
+    Scenarioo(7,  "LowDiv 7", 0.15,  0.50, :mid,               :low),
+    Scenarioo(8,  "LowDiv 8", 0.18,  0.65, :skew_broad,        :low),
+    Scenarioo(9,  "MinDiv 9", 0.21,  0.78, :skew_broad,        :low),
+    Scenarioo(10, "MinDiv 10",0.24,  0.88, :skew_broad,        :low),
 ]
 
 # Occupancy target sampler (fraction of grid climatically suitable)
-function draw_target_occ(rng::AbstractRNG, scen::Scenario)
+function draw_target_occ(rng::AbstractRNG, scen::Scenarioo)
     if scen.occ_mode == :varwide
         return 0.03 + rand(rng) * (0.75 - 0.03)
     elseif scen.occ_mode == :varwide_mildsigma
@@ -649,7 +649,7 @@ function draw_anisotropy(rng::AbstractRNG, sigma_var::Symbol)
 end
 
 # Assign per-species climate masks to match occupancy targets, and (optionally) enforce LCC≥Emin at h=0.
-function assign_climate_masks(rng::AbstractRNG, ws::CCWorkspace, env1, env2, mu1, mu2, scen::Scenario)
+function assign_climate_masks(rng::AbstractRNG, ws::CCWorkspace, env1, env2, mu1, mu2, scen::Scenarioo)
     clim = Vector{BitVector}(undef, S)
     for sp in 1:S
         got = false
@@ -692,7 +692,7 @@ end
 #   - shared-cohort (raw cohort richness)
 # ============================================================
 
-function simulate_replicate(rng::AbstractRNG, ws::CCWorkspace, scen::Scenario, geometry::Symbol; which::Symbol=:consumers)
+function simulate_replicate(rng::AbstractRNG, ws::CCWorkspace, scen::Scenarioo, geometry::Symbol; which::Symbol=:consumers)
 
     nb = round(Int, BASAL_FRAC * S)
     basal_mask = BitVector(falses(S))
@@ -839,15 +839,15 @@ function add_lines_shared!(ax, x, d)
     lines!(ax, x, d[:SAR_AB], linestyle=:dash, label="SAR (AB, cohort-fit)")
 end
 
-function scenario_title(scen::Scenario)
+function scenario_title(scen::Scenarioo)
     return @sprintf("%s | C=%.2f, r*=%.2f, occ=%s, σvar=%s",
         scen.name, scen.C, scen.target_r, String(scen.occ_mode), String(scen.sigma_var))
 end
 
 function make_panel_2x3(
     results_by_geom::Dict{Symbol,Dict{Symbol,Dict{Symbol,Vector{Float64}}}},
-    scenA::Scenario,
-    scenB::Scenario;
+    scenA::Scenarioo,
+    scenB::Scenarioo;
     mode::Symbol = :relative
 )
     f = Figure(size=(1700, 900))
