@@ -1093,11 +1093,11 @@ end
 # 17) Plotting
 # ============================================================
 
-function add_lines!(ax, x, yA, yAB, ySAR, ySEFF)
+function add_lines!(ax, x, yA, yAB, ySAR)#, ySEFF)
     lines!(ax, x, yA,  label="Mechanistic A")
     lines!(ax, x, yAB, label="Mechanistic AB")
     lines!(ax, x, ySAR, linestyle=:dash, label="SAR baseline")
-    lines!(ax, x, ySEFF, linestyle=:dash, label="SAR effective")
+    # lines!(ax, x, ySEFF, linestyle=:dash, label="SAR effective")
     axislegend(ax; position=:rb, framevisible=false)
 end
 
@@ -1115,7 +1115,8 @@ function fig1_plot(curves, title_str; which_label::String="")
                 ylabel = "Gamma richness ($(which_label))"
             )
             c = curves[(g,scen)]
-            add_lines!(ax, HL, c[:gamma_A], c[:gamma_AB], c[:sar_baseline], c[:sar_effective])
+            # add_lines!(ax, HL, c[:gamma_A], c[:gamma_AB], c[:sar_baseline], c[:sar_effective])
+            add_lines!(ax, HL, c[:gamma_A], c[:gamma_AB], c[:sar_baseline])
         end
     end
     Label(f[0, :], title_str, fontsize=20)
