@@ -66,10 +66,10 @@ const AUTOCORR_ITERS = 18
 const AUTOCORR_ALPHA = 0.55  # 0..1 (higher = smoother)
 
 # Sweep axes
-const CONNECTANCE_RANGE = (0.02, 0.15)
-const CORR_RANGE       = (-0.5, 0.9)
-const N_CONNECT = 15
-const N_CORR    = 15
+const CONNECTANCE_RANGE = (0.02, 0.1)
+const CORR_RANGE       = (0.0, 0.9)
+const N_CONNECT = 12
+const N_CORR    = 12
 
 # Replicates per heatmap cell (increase for final)
 const NREP = 8
@@ -120,7 +120,6 @@ const NEIGH_4 = build_neighbors_4()
 # ============================================================
 # 2) Connectivity utilities (LCC and largest component mask)
 # ============================================================
-
 mutable struct CCWorkspace
     seen::Vector{Int32}
     stamp::Int32
@@ -293,7 +292,7 @@ struct BreadthRegime
     logsd::Float64
 end
 
-const REGIMES = [
+const regimes = [
     BreadthRegime("Narrow + LowVar",  7.5, 0.20),
     BreadthRegime("Narrow + HighVar", 7.5, 0.55),
     BreadthRegime("Broad + LowVar",   16.0, 0.20),
@@ -849,28 +848,28 @@ function regime_name(reg::BreadthRegime)
 end
 
 function sweep_all()
-    Cvals = collect(range(CONNECTANCE_RANGE[1], CONNECTANCE_RANGE[2], length=N_CONNECT))
-    Rvals = collect(range(CORR_RANGE[1], CORR_RANGE[2], length=N_CORR))
+    Cvals = collect(range(0.02, 0.1, length=N_CONNECT))
+    Rvals = collect(range(0.0, 0.9, length=N_CORR))
 
     # Store: Dict keyed by (env, netfam, regime_index, metric) => Matrix(N_CORR, N_CONNECT)
     metrics = [:dSrel, :mean_jaccard_mismatch, :frac_affected, :realized_overlap, :achieved_r, :Creal]
     store = Dict{Tuple{Symbol,Symbol,Int,Symbol}, Matrix{Float64}}()
 
-    for env in ENVKINDS, net in NETFAMS, (ri, reg) in enumerate(REGIMES), m in metrics
+    for env in ENVKINDS, net in NETFAMS, (ri, reg) in enumerate(regimes), m in metrics
         store[(env, net, ri, m)] = fill(NaN, N_CORR, N_CONNECT)
     end
 
     println("Threads: ", Threads.nthreads())
     println("Grid: $(NX)x$(NY) cells=$(NCELLS), S=$(S), basal_frac=$(BASAL_FRAC), Emin=$(Emin_patch), connectivity_filter=$(USE_CONNECTIVITY_FILTER)")
     println("OUTDIR: ", OUTDIR)
-    println("Sweep: env=$(length(ENVKINDS)) × net=$(length(NETFAMS)) × regimes=$(length(REGIMES)) × (C=$(N_CONNECT), r=$(N_CORR)) × reps=$(NREP)\n")
+    println("Sweep: env=$(length(ENVKINDS)) × net=$(length(NETFAMS)) × regimes=$(length(regimes)) × (C=$(N_CONNECT), r=$(N_CORR)) × reps=$(NREP)\n")
 
-    total_cells = length(ENVKINDS)*length(NETFAMS)*length(REGIMES)*N_CONNECT*N_CORR
+    total_cells = length(ENVKINDS)*length(NETFAMS)*length(regimes)*N_CONNECT*N_CORR
     cell_counter = 0
 
     for env in ENVKINDS
         for net in NETFAMS
-            for (ri, reg) in enumerate(REGIMES)
+            for (ri, reg) in enumerate(regimes)
 
                 # parallelize over grid cells
                 Threads.@threads for idx in 1:(N_CONNECT * N_CORR)
@@ -1045,14 +1044,14 @@ end
 # ============================================================
 # 12) MAIN
 # ============================================================
-# store, Cvals, Rvals = sweep_all()
+store, Cvals, Rvals = sweep_all()
 using Serialization
 
-# cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn.jls")
-# serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
-# println("Saved sweep cache to: ", cache_path)
+cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange.jls")
+serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
+println("Saved sweep cache to: ", cache_path)
 
-cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn.jls")
+cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange.jls")
 data = deserialize(cache_path)
 
 store = data.store
@@ -1072,7 +1071,7 @@ function save_matrix_tsv(path::String, M::Matrix{Float64})
 end
 
 println("\nExploding outputs...")
-for env in ENVKINDS, net in NETFAMS, (ri, reg) in enumerate(REGIMES)
+for env in ENVKINDS, net in NETFAMS, (ri, reg) in enumerate(regimes)
     for metric in [:dSrel, :mean_jaccard_mismatch, :frac_affected, :realized_overlap, :achieved_r, :Creal]
         M = store[(env, net, ri, metric)]
         fname = "mat_$(env)_$(net)_reg$(ri)_$(metric).tsv"
@@ -1087,42 +1086,42 @@ for env in ENVKINDS
     f1 = facet_heatmaps(
         store, Cvals, Rvals, env, :dSrel;
         title = "Relative richness loss (consumers-only): 1 - S_AB / S_A — $(envname)",
-        outfile = "heatmaps_$(env)_metric_dSrel_smallerConn.png"
+        outfile = "heatmaps_$(env)_metric_dSrel_smallerConn_smallerR.png"
     )
     display(f1)
 
     f2 = facet_heatmaps(
         store, Cvals, Rvals, env, :mean_jaccard_mismatch;
         title = "Mean per-species Jaccard mismatch (consumers-only): mean(1 - J(A_i,AB_i)) — $(envname)",
-        outfile = "heatmaps_$(env)_metric_mean_jaccard_mismatch_smallerConn.png"
+        outfile = "heatmaps_$(env)_metric_mean_jaccard_mismatch_smallerConn_smallerR.png"
     )
     display(f2)
 
     f3 = facet_heatmaps(
         store, Cvals, Rvals, env, :frac_affected;
         title = "Fraction affected (consumers-only): frac(A_i != AB_i) — $(envname)",
-        outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn.png"
+        outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn_smallerR.png"
     )
     display(f3)
 
     f4 = facet_heatmaps(
         store, Cvals, Rvals, env, :realized_overlap;
-        title = "Realized prey-support overlap (diagnostic): mean_i avg_j |A_i∩A_j|/|A_i| — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn.png"
+        title = "Realized prey-support overlap: mean_i avg_j |A_i∩A_j|/|A_i| — $(envname)",
+        outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn_smallerR.png"
     )
     display(f4)
 
     f5 = facet_heatmaps(
         store, Cvals, Rvals, env, :achieved_r;
-        title = "Achieved mechanistic niche correlation (diagnostic) — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn.png"
+        title = "Achieved mechanistic niche correlation — $(envname)",
+        outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn_smallerR.png"
     )
     display(f5)
 
     f6 = facet_heatmaps(
         store, Cvals, Rvals, env, :Creal;
-        title = "Realized connectance (diagnostic): L/S^2 — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_Creal_smallerConn.png"
+        title = "Realized connectance: L/S^2 — $(envname)",
+        outfile = "heatmaps_$(env)_diagnostic_Creaal_smallerConn_smallerR.png"
     )
     display(f6)
 end
