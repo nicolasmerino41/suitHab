@@ -288,7 +288,8 @@ function plot_two_case_panel(case_a::Int, case_b::Int; which::Symbol)
                 ylabel = "Gamma richness ($(which == :consumers ? "consumers" : "all"))"
             )
             curves = compute_case_curves(case_idx, g, which)
-            add_lines!(ax, HL, curves[:gamma_A], curves[:gamma_AB], curves[:sar_baseline], curves[:sar_effective])
+            # add_lines!(ax, HL, curves[:gamma_A], curves[:gamma_AB], curves[:sar_baseline], curves[:sar_effective])
+            add_lines!(ax, HL, curves[:gamma_A], curves[:gamma_AB], curves[:sar_baseline])
         end
     end
 
