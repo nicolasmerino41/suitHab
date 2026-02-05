@@ -372,7 +372,6 @@ null_hist_plot(
 # ---------------------------
 # 11) SUMMARY
 # ---------------------------
-
 summary = DataFrame(
     stat = ["mean_absdiff_Tmax"],
     obs = [obs_mean_absdiff],
