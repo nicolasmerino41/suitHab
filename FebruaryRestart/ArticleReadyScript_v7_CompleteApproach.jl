@@ -66,7 +66,7 @@ const AUTOCORR_ITERS = 18
 const AUTOCORR_ALPHA = 0.55  # 0..1 (higher = smoother)
 
 # Sweep axes
-const CONNECTANCE_RANGE = (0.02, 0.1)
+const CONNECTANCE_RANGE = (0.01, 0.1)
 const CORR_RANGE       = (0.0, 0.9)
 const N_CONNECT = 12
 const N_CORR    = 12
@@ -210,19 +210,72 @@ function largest_component_mask(ws::CCWorkspace, mask::BitVector)
     return out
 end
 
+# Override the old behavior:
+# - if USE_CONNECTIVITY_FILTER = false -> return mask unchanged
+# - else -> keep all components >= Emin (and drop the rest)
+# ============================================================
+# Connectivity filter (PATCH): keep ALL components ≥ Emin
+# ============================================================
+
+# Keeps every connected component (4-neigh) whose size is >= Emin
+# Drops smaller components. If nothing survives -> all-false.
+function keep_components_ge_Emin(ws::CCWorkspace, mask::BitVector, Emin::Int)
+    count(mask) == 0 && return BitVector(falses(NCELLS))
+
+    ws.stamp += 1
+    stamp = ws.stamp
+    seen = ws.seen
+    empty!(ws.queue)
+
+    out = BitVector(falses(NCELLS))
+    comp_nodes = Int[]
+
+    @inbounds for i in 1:NCELLS
+        if mask[i] && seen[i] != stamp
+            empty!(comp_nodes)
+
+            # BFS collect this component
+            seen[i] = stamp
+            push!(ws.queue, i)
+            qpos = 1
+
+            while qpos <= length(ws.queue)
+                v = ws.queue[qpos]; qpos += 1
+                push!(comp_nodes, v)
+                for nb in NEIGH_4[v]
+                    if mask[nb] && seen[nb] != stamp
+                        seen[nb] = stamp
+                        push!(ws.queue, nb)
+                    end
+                end
+            end
+
+            # keep it if large enough
+            if length(comp_nodes) >= Emin
+                for v in comp_nodes
+                    out[v] = true
+                end
+            end
+
+            empty!(ws.queue)
+        end
+    end
+
+    return out
+end
+
 function apply_connectivity_filter(ws::CCWorkspace, mask::BitVector, Emin::Int)
     if !USE_CONNECTIVITY_FILTER
         return mask
     end
+
+    # cheap early-out: total area < Emin can't contain any component >= Emin
     if count(mask) < Emin
         return BitVector(falses(NCELLS))
     end
-    lcc = lcc_size(ws, mask)
-    if lcc < Emin
-        return BitVector(falses(NCELLS))
-    end
-    # keep only largest component (more interpretable than keeping multiple fragments)
-    return largest_component_mask(ws, mask)
+
+    kept = keep_components_ge_Emin(ws, mask, Emin)
+    return (count(kept) == 0) ? BitVector(falses(NCELLS)) : kept
 end
 
 # ============================================================
@@ -848,7 +901,7 @@ function regime_name(reg::BreadthRegime)
 end
 
 function sweep_all()
-    Cvals = collect(range(0.02, 0.1, length=N_CONNECT))
+    Cvals = collect(range(0.01, 0.1, length=N_CONNECT))
     Rvals = collect(range(0.0, 0.9, length=N_CORR))
 
     # Store: Dict keyed by (env, netfam, regime_index, metric) => Matrix(N_CORR, N_CONNECT)
@@ -940,7 +993,8 @@ function global_minmax(mats::Vector{Matrix{Float64}})
 end
 
 function facet_heatmaps(store, Cvals, Rvals, env::Symbol, metric::Symbol;
-                        title::String="", outfile::Union{Nothing,String}=nothing)
+                        title::String="", outfile::Union{Nothing,String}=nothing,
+                        fixed_colorbar = false)
 
     netfams = (:random, :modular, :heavytail, :cascade)
     reg_titles = ("Narrow + LowVar", "Narrow + HighVar",
@@ -1020,7 +1074,12 @@ function facet_heatmaps(store, Cvals, Rvals, env::Symbol, metric::Symbol;
             M_RC = orient_to_RC(Mraw)                 # (nR, nC) with semantic meaning
             Z = permutedims(M_RC)                     # (nC, nR) for Makie heatmap x/y mapping
 
-            h = heatmap!(ax, xcoords, ycoords, Z)     # AXIS-SAFE
+            if !fixed_colorbar
+                h = heatmap!(ax, xcoords, ycoords, Z)     # AXIS-SAFE
+            else
+                h = heatmap!(ax, xcoords, ycoords, Z, colorrange = (0.0, 1.0))
+            end
+
             hobj === nothing && (hobj = h)
 
             # reduce clutter (unchanged)
@@ -1044,12 +1103,12 @@ end
 # ============================================================
 # 12) MAIN
 # ============================================================
-store, Cvals, Rvals = sweep_all()
+# store, Cvals, Rvals = sweep_all()
 using Serialization
 
-cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange.jls")
-serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
-println("Saved sweep cache to: ", cache_path)
+# cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange.jls")
+# serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
+# println("Saved sweep cache to: ", cache_path)
 
 cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange.jls")
 data = deserialize(cache_path)
@@ -1086,42 +1145,48 @@ for env in ENVKINDS
     f1 = facet_heatmaps(
         store, Cvals, Rvals, env, :dSrel;
         title = "Relative richness loss (consumers-only): 1 - S_AB / S_A — $(envname)",
-        outfile = "heatmaps_$(env)_metric_dSrel_smallerConn_smallerR.png"
+        outfile = "heatmaps_$(env)_metric_dSrel_smallerConn_smallerR.png",
+        fixed_colorbar = true
     )
     display(f1)
 
     f2 = facet_heatmaps(
         store, Cvals, Rvals, env, :mean_jaccard_mismatch;
         title = "Mean per-species Jaccard mismatch (consumers-only): mean(1 - J(A_i,AB_i)) — $(envname)",
-        outfile = "heatmaps_$(env)_metric_mean_jaccard_mismatch_smallerConn_smallerR.png"
+        outfile = "heatmaps_$(env)_metric_mean_jaccard_mismatch_smallerConn_smallerR.png",
+        fixed_colorbar = true
     )
     display(f2)
 
     f3 = facet_heatmaps(
         store, Cvals, Rvals, env, :frac_affected;
         title = "Fraction affected (consumers-only): frac(A_i != AB_i) — $(envname)",
-        outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn_smallerR.png"
+        outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn_smallerR.png",
+        fixed_colorbar = true
     )
     display(f3)
 
     f4 = facet_heatmaps(
         store, Cvals, Rvals, env, :realized_overlap;
         title = "Realized prey-support overlap: mean_i avg_j |A_i∩A_j|/|A_i| — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn_smallerR.png"
+        outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn_smallerR.png",
+        fixed_colorbar = true
     )
     display(f4)
 
     f5 = facet_heatmaps(
         store, Cvals, Rvals, env, :achieved_r;
         title = "Achieved mechanistic niche correlation — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn_smallerR.png"
+        outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn_smallerR.png",
+        fixed_colorbar = false
     )
     display(f5)
 
     f6 = facet_heatmaps(
         store, Cvals, Rvals, env, :Creal;
         title = "Realized connectance: L/S^2 — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_Creaal_smallerConn_smallerR.png"
+        outfile = "heatmaps_$(env)_diagnostic_Creaal_smallerConn_smallerR.png",
+        fixed_colorbar = false
     )
     display(f6)
 end
