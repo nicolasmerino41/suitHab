@@ -44,16 +44,34 @@ TROPHIC_INTERACTIONS = Set([
 # 3) HELPERS
 # =========================
 
-function url_encode_species(sp::String)
+function url_encode_species(sp::AbstractString)
     replace(strip(sp), " " => "%20")
 end
+GLOBI_URL = "https://api.globalbioticinteractions.org/interaction"
 
-function globi_interactions_for_species(sp::String)
-    query = "?sourceTaxon=$(url_encode_species(sp))"
-    r = HTTP.get(GLOBI_URL * query)
-    r.status != 200 && return DataFrame()
-    return DataFrame(JSON3.read(r.body))
+function globi_interactions_for_species(sp::AbstractString)
+    query = "?sourceTaxon=" * HTTP.escapeuri(strip(sp))
+    r = HTTP.get(GLOBI_URL * query; status_exception=false)
+    r.status == 200 || return DataFrame()
+
+    obj = JSON3.read(r.body)
+
+    (haskey(obj, :columns) && haskey(obj, :data)) || return DataFrame()
+
+    cols = Symbol.(obj.columns)
+    rows = obj.data
+    isempty(rows) && return DataFrame()
+
+    nt_rows = NamedTuple[]
+    for row in rows
+        length(row) == length(cols) || continue
+        push!(nt_rows, NamedTuple{Tuple(cols)}(Tuple(row)))
+    end
+
+    isempty(nt_rows) && return DataFrame()
+    return DataFrame(nt_rows)
 end
+
 
 # =========================
 # 4) SPECIES SETS (🔒 CORE LOGIC)
