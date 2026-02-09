@@ -142,7 +142,7 @@ function hist_with_mean_q90(vals::Vector{Float64}; title="", xlabel="", outfile=
     v = vals[isfinite.(vals)]
 
     fig = Figure(size = (900, 650))
-
+    
     # --- MAIN AXIS (creates row 1) ---
     ax = Axis(
         fig[1, 1];
@@ -205,6 +205,9 @@ function scatter_support_vs_mismatch(
         markersize = 8,
         color = (:dodgerblue, 0.6)
     )
+
+    ylims!(ax, -0.05, 1.05)
+    xlims!(ax, -0.05, 1.05)
 
     # Label(fig[2, 1], "n=$(length(x))", fontsize = 12)
 

@@ -22,8 +22,8 @@ using CairoMakie
 script_dir   = @__DIR__
 project_root = script_dir
 
-thermtol_csv = joinpath(project_root, "FebruaryRestart", "thermtol_comb_final.csv")
-metaweb_csv  = joinpath(project_root, "FebruaryRestart", "thermofresh_globi_metaweb_fish_predators.csv")
+thermtol_csv = joinpath(project_root, "thermtol_comb_final.csv")
+metaweb_csv  = joinpath(project_root, "thermofresh_globi_metaweb_fish_predators.csv")
 
 outdir = joinpath(project_root, "outputs_empirical_thermofresh_globi_fish_$(METRIC)")
 isdir(outdir) || mkpath(outdir)
