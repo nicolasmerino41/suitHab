@@ -39,10 +39,9 @@ using Dates
 # ============================================================
 # 0) Global parameters (tune here)
 # ============================================================
-
 # Spatial grid
-const NX = 45
-const NY = 45
+const NX = 60
+const NY = 60
 const NCELLS = NX * NY
 
 # Species pool
@@ -1103,10 +1102,10 @@ end
 # ============================================================
 # 12) MAIN
 # ============================================================
-# store, Cvals, Rvals = sweep_all()
+store, Cvals, Rvals = sweep_all()
 using Serialization
 
-# cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange.jls")
+# cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange_60x60cells.jls")
 # serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
 # println("Saved sweep cache to: ", cache_path)
 
