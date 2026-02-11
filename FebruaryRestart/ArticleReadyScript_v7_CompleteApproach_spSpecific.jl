@@ -35,8 +35,8 @@ using Serialization
 # ============================================================
 
 # Spatial grid
-const NX = 45
-const NY = 45
+const NX = 60
+const NY = 60
 const NCELLS = NX * NY
 
 # Species pool
@@ -87,7 +87,7 @@ const BASE_SEED = 20260202
 
 # Output directory
 # ts = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
-OUTDIR = joinpath(pwd(), "output_jaccard_tail")
+OUTDIR = joinpath(pwd(), "output_jaccard_tail_60x60_")
 isdir(OUTDIR) || mkpath(OUTDIR)
 
 # ============================================================
@@ -1010,13 +1010,15 @@ end
 println("OUTDIR: ", OUTDIR)
 
 # --- Run sweep
-# store, Cvals, Rvals = sweep_all()
+store, Cvals, Rvals = sweep_all()
 
 # --- Cache
 cache_path = joinpath(OUTDIR, "sweep_cache_jaccard_tail.jls")
 serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
 println("Saved sweep cache to: ", cache_path)
+
 using Serialization
+
 data = deserialize(cache_path)
 store = data.store
 Cvals = data.Cvals
