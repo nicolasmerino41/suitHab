@@ -1109,7 +1109,7 @@ using Serialization
 # serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
 # println("Saved sweep cache to: ", cache_path)
 
-cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange.jls")
+cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange_60x60cells.jls")
 data = deserialize(cache_path)
 
 store = data.store
@@ -1144,7 +1144,7 @@ for env in ENVKINDS
     f1 = facet_heatmaps(
         store, Cvals, Rvals, env, :dSrel;
         title = "Relative richness loss (consumers-only): 1 - S_AB / S_A — $(envname)",
-        outfile = "heatmaps_$(env)_metric_dSrel_smallerConn_smallerR.png",
+        outfile = "heatmaps_$(env)_metric_dSrel_smallerConn_smallerR_60x60.png",
         fixed_colorbar = true
     )
     display(f1)
@@ -1152,15 +1152,15 @@ for env in ENVKINDS
     f2 = facet_heatmaps(
         store, Cvals, Rvals, env, :mean_jaccard_mismatch;
         title = "Mean per-species Jaccard mismatch (consumers-only): mean(1 - J(A_i,AB_i)) — $(envname)",
-        outfile = "heatmaps_$(env)_metric_mean_jaccard_mismatch_smallerConn_smallerR.png",
-        fixed_colorbar = true
+        outfile = "heatmaps_$(env)_metric_mean_jaccard_mismatch_smallerConn_smallerR_60x60.png",
+        # fixed_colorbar = true
     )
     display(f2)
 
     f3 = facet_heatmaps(
         store, Cvals, Rvals, env, :frac_affected;
         title = "Fraction affected (consumers-only): frac(A_i != AB_i) — $(envname)",
-        outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn_smallerR.png",
+        outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn_smallerR_60x60.png",
         fixed_colorbar = true
     )
     display(f3)
@@ -1168,7 +1168,7 @@ for env in ENVKINDS
     f4 = facet_heatmaps(
         store, Cvals, Rvals, env, :realized_overlap;
         title = "Realized prey-support overlap: mean_i avg_j |A_i∩A_j|/|A_i| — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn_smallerR.png",
+        outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn_smallerR_60x60.png",
         fixed_colorbar = true
     )
     display(f4)
@@ -1176,7 +1176,7 @@ for env in ENVKINDS
     f5 = facet_heatmaps(
         store, Cvals, Rvals, env, :achieved_r;
         title = "Achieved mechanistic niche correlation — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn_smallerR.png",
+        outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn_smallerR_60x60.png",
         fixed_colorbar = false
     )
     display(f5)
@@ -1184,7 +1184,7 @@ for env in ENVKINDS
     f6 = facet_heatmaps(
         store, Cvals, Rvals, env, :Creal;
         title = "Realized connectance: L/S^2 — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_Creaal_smallerConn_smallerR.png",
+        outfile = "heatmaps_$(env)_diagnostic_Creaal_smallerConn_smallerR_60x60.png",
         fixed_colorbar = false
     )
     display(f6)
