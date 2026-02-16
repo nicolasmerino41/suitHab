@@ -22,6 +22,10 @@
 # - Environmental space: Random vs Autocorrelated field
 # - Mechanistic niche correlation: correlation across consumers between μ_cons and mean μ_prey(cons)
 
+#!/usr/bin/env julia
+# Julia 1.11
+# Run: julia --threads auto biotic_divergence_jaccard_tail_pipeline_Rready.jl
+
 using Random
 using Statistics
 using LinearAlgebra
@@ -31,62 +35,45 @@ using Dates
 using Serialization
 
 # ============================================================
-# 0) Global parameters (tune here)
+# 0) Global parameters
 # ============================================================
-
-# Spatial grid
 const NX = 60
 const NY = 60
 const NCELLS = NX * NY
 
-# Species pool
 const S = 250
 const BASAL_FRAC = 0.30
 
-# Spatial viability filter (movement/connectivity proxy)
 const USE_CONNECTIVITY_FILTER = true
 const Emin_patch = 60
 
-# Environmental field domain (e.g., temperature)
 const E_MIN = 0.0
 const E_MAX = 100.0
 
-# Niche suitability: Gaussian with threshold
 const SUIT_THRESH = 0.25
 
-# Environmental autocorrelation
 const AUTOCORR_ITERS = 18
 const AUTOCORR_ALPHA = 0.55
 
-# Sweep axes
-const CONNECTANCE_RANGE = (0.005, 0.1)
-const CORR_RANGE       = (0.0, 0.9)
+const CONNECTANCE_RANGE = (0.01, 0.1)
+const CORR_RANGE = (0.0, 0.9)
 const N_CONNECT = 15
-const N_CORR    = 15
+const N_CORR = 15
 
-# Replicates per heatmap cell
-const NREP = 8
-
-# Tail threshold for "fraction strongly affected"
+const NREP = 15
 const TAIL_THRESH = 0.8
 
-# Network-family knobs
 const N_MODULES = 6
 const MODULAR_IN_BIAS = 6.0
 const HEAVYTAIL_GAMMA = 2.2
 const HEAVYTAIL_KMAX_FRAC = 0.35
 const CASCADE_LAMBDA = 2.5
 
-# Mechanistic niche-correlation builder knobs
 const RELAX_ITERS = 30
 const MU_NOISE_SD = 1.8
-const TARGET_R_TOL = 0.03
 
-# Thread-safe seeds
 const BASE_SEED = 20260202
 
-# Output directory
-# ts = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
 OUTDIR = joinpath(pwd(), "output_jaccard_tail_60x60_")
 isdir(OUTDIR) || mkpath(OUTDIR)
 
@@ -116,7 +103,6 @@ const NEIGH_4 = build_neighbors_4()
 # ============================================================
 # 2) Connectivity utilities (LCC and largest component mask)
 # ============================================================
-
 mutable struct CCWorkspace
     seen::Vector{Int32}
     stamp::Int32
@@ -223,7 +209,6 @@ end
 # ============================================================
 # 3) Environmental fields
 # ============================================================
-
 function rescale_to_range!(v::Vector{Float64}, lo::Float64, hi::Float64)
     mn = minimum(v); mx = maximum(v)
     if mx == mn
@@ -267,7 +252,6 @@ end
 # ============================================================
 # 4) Niches: suitability masks (1D Gaussian threshold)
 # ============================================================
-
 @inline function suitability_mask_1d(E::Vector{Float64}, μ::Float64, σ::Float64, thresh::Float64)
     lim = sqrt(-2.0 * log(thresh))  # |(E-μ)/σ| <= lim
     invσ = 1.0 / max(σ, 1e-6)
@@ -304,7 +288,6 @@ end
 # ============================================================
 # 5) Network builders (4 families)
 # ============================================================
-
 function consumers_and_basal()
     nb = round(Int, BASAL_FRAC * S)
     basal_mask = BitVector(falses(S))
@@ -515,7 +498,6 @@ end
 # ============================================================
 # 6) Mechanistic niche correlation builder
 # ============================================================
-
 function pearson_r(a::Vector{Float64}, b::Vector{Float64})
     ma = mean(a); mb = mean(b)
     sa = std(a); sb = std(b)
@@ -591,7 +573,6 @@ end
 # ============================================================
 # 7) AB fixed point with one-prey rule
 # ============================================================
-
 function fixed_point_AB(A_pres::Vector{BitVector}, prey::Vector{Vector{Int}}, basal_mask::BitVector)
     pres = [copy(A_pres[i]) for i in 1:S]
     newp = [BitVector(falses(NCELLS)) for _ in 1:S]
@@ -625,7 +606,6 @@ end
 # ============================================================
 # 8) Per-species mismatch vector + summaries
 # ============================================================
-
 function jaccard_mismatch_vec(A::Vector{BitVector}, AB::Vector{BitVector}, basal_mask::BitVector)
     vals = Float64[]
     for i in 1:S
@@ -672,7 +652,6 @@ end
 # ============================================================
 # 9) One replicate at (envkind, networkfamily, regime, C, target_r)
 # ============================================================
-
 function simulate_one!(
     rng::AbstractRNG,
     ws::CCWorkspace,
@@ -743,7 +722,6 @@ end
 # ============================================================
 # 10) Sweep runner (heatmaps)
 # ============================================================
-
 const ENVKINDS = [:random, :autocorr]
 const NETFAMS  = [:random, :modular, :heavytail, :cascade]
 
@@ -820,7 +798,6 @@ end
 # 11) Plotting: facet grid (net families × regimes) of heatmaps
 #     AXIS-SAFE orientation (semantic M[R,C] plotted with x=C, y=R)
 # ============================================================
-
 function facet_heatmaps(store, Cvals, Rvals, env::Symbol, metric::Symbol;
                         title::String="", outfile::Union{Nothing,String}=nothing)
 
@@ -911,7 +888,6 @@ end
 # ============================================================
 # 12) Distribution figures for selected cells (hist + ECDF)
 # ============================================================
-
 function ecdf_xy(vals::Vector{Float64})
     isempty(vals) && return (Float64[], Float64[])
     v = sort(vals)
@@ -1009,21 +985,15 @@ end
 # ============================================================
 println("OUTDIR: ", OUTDIR)
 
-# --- Run sweep
+# --- Run sweep fresh (NO deserialization before export)
 store, Cvals, Rvals = sweep_all()
 
-# --- Cache
+# --- Save cache
 cache_path = joinpath(OUTDIR, "sweep_cache_jaccard_tail.jls")
 serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
 println("Saved sweep cache to: ", cache_path)
 
-using Serialization
-
-data = deserialize(cache_path)
-store = data.store
-Cvals = data.Cvals
-Rvals = data.Rvals
-# --- Heatmaps
+# --- Heatmaps (unchanged behaviour)
 for env in ENVKINDS
     envname = env == :random ? "Random environment" : "Autocorrelated environment"
 
@@ -1040,26 +1010,37 @@ for env in ENVKINDS
         outfile = "heatmaps_$(env)_mismatch_frac_gt.png"
     )
     display(f2)
-
-    # Optional diagnostics (often useful to sanity-check)
-    f3 = facet_heatmaps(
-        store, Cvals, Rvals, env, :achieved_r;
-        title = "Diagnostic: achieved mechanistic niche correlation — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_achieved_r.png"
-    )
-    display(f3)
-
-    f4 = facet_heatmaps(
-        store, Cvals, Rvals, env, :Creal;
-        title = "Diagnostic: realized connectance L/S^2 — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_Creal.png"
-    )
-    display(f4)
 end
 
-# --- Distribution probes (hist + ECDF)
-println("\nRunning distribution probes (hist + ECDF) ...")
-run_distribution_probes(store, Cvals, Rvals)
+# ============================================================
+# 14) EXPORT NUMERIC MATRICES FOR R
+# ============================================================
+function save_matrix_tsv(path::String, M::Matrix{Float64})
+    open(path, "w") do io
+        nr, nc = size(M)
+        for r in 1:nr
+            println(io, join([@sprintf("%.6f", M[r,c]) for c in 1:nc], '\t'))
+        end
+    end
+end
 
-println("\nDone. Output directory:")
+println("\nExporting R-ready TSV matrices...")
+
+for env in ENVKINDS, net in NETFAMS, (ri, _) in enumerate(regimes)
+
+    for metric in [:mismatch_q90, :mismatch_frac_gt]
+
+        M = store[(env, net, ri, metric)]
+
+        fname = "mat_$(env)_$(net)_reg$(ri)_$(metric).tsv"
+
+        save_matrix_tsv(joinpath(OUTDIR, fname), M)
+
+    end
+end
+
+println("TSV export complete.")
+
+println("\nDone.")
+println("Output directory:")
 println(OUTDIR)
