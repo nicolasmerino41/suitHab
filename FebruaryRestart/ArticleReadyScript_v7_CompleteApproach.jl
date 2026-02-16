@@ -71,7 +71,7 @@ const N_CONNECT = 12
 const N_CORR    = 12
 
 # Replicates per heatmap cell (increase for final)
-const NREP = 8
+const NREP = 15
 
 # Network-family knobs
 const N_MODULES = 6
@@ -693,7 +693,6 @@ end
 # ============================================================
 # 7) AB fixed point with one-prey rule
 # ============================================================
-
 function fixed_point_AB(A_pres::Vector{BitVector}, prey::Vector{Vector{Int}}, basal_mask::BitVector)
     pres = [copy(A_pres[i]) for i in 1:S]
     newp = [BitVector(falses(NCELLS)) for _ in 1:S]
@@ -727,7 +726,6 @@ end
 # ============================================================
 # 8) Metrics
 # ============================================================
-
 function gamma_richness_cons(pres::Vector{BitVector}, basal_mask::BitVector)
     c = 0
     for i in 1:S
@@ -786,7 +784,6 @@ end
 # ============================================================
 # 9) One replicate at (envkind, networkfamily, regime, C, target_r)
 # ============================================================
-
 @inline function count_links(prey::Vector{Vector{Int}}, basal_mask::BitVector)
     L = 0
     for i in 1:S
@@ -885,7 +882,6 @@ end
 # ============================================================
 # 10) Sweep runner
 # ============================================================
-
 const ENVKINDS = [:random, :autocorr]
 const NETFAMS  = [:random, :modular, :heavytail, :cascade]
 const NETNAMES = Dict(
@@ -979,7 +975,6 @@ end
 # ============================================================
 # 11) Plotting: facet grid (net families × regimes) of heatmaps
 # ============================================================
-
 function global_minmax(mats::Vector{Matrix{Float64}})
     vals = Float64[]
     for M in mats
@@ -1141,13 +1136,13 @@ end
 for env in ENVKINDS
     envname = env == :random ? "Random environment" : "Autocorrelated environment"
 
-    f1 = facet_heatmaps(
-        store, Cvals, Rvals, env, :dSrel;
-        title = "Relative richness loss (consumers-only): 1 - S_AB / S_A — $(envname)",
-        outfile = "heatmaps_$(env)_metric_dSrel_smallerConn_smallerR_60x60.png",
-        fixed_colorbar = true
-    )
-    display(f1)
+    # f1 = facet_heatmaps(
+    #     store, Cvals, Rvals, env, :dSrel;
+    #     title = "Relative richness loss (consumers-only): 1 - S_AB / S_A — $(envname)",
+    #     outfile = "heatmaps_$(env)_metric_dSrel_smallerConn_smallerR_60x60.png",
+    #     fixed_colorbar = true
+    # )
+    # display(f1)
 
     f2 = facet_heatmaps(
         store, Cvals, Rvals, env, :mean_jaccard_mismatch;
@@ -1157,37 +1152,37 @@ for env in ENVKINDS
     )
     display(f2)
 
-    f3 = facet_heatmaps(
-        store, Cvals, Rvals, env, :frac_affected;
-        title = "Fraction affected (consumers-only): frac(A_i != AB_i) — $(envname)",
-        outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn_smallerR_60x60.png",
-        fixed_colorbar = true
-    )
-    display(f3)
+    # f3 = facet_heatmaps(
+    #     store, Cvals, Rvals, env, :frac_affected;
+    #     title = "Fraction affected (consumers-only): frac(A_i != AB_i) — $(envname)",
+    #     outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn_smallerR_60x60.png",
+    #     fixed_colorbar = true
+    # )
+    # display(f3)
 
-    f4 = facet_heatmaps(
-        store, Cvals, Rvals, env, :realized_overlap;
-        title = "Realized prey-support overlap: mean_i avg_j |A_i∩A_j|/|A_i| — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn_smallerR_60x60.png",
-        fixed_colorbar = true
-    )
-    display(f4)
+    # f4 = facet_heatmaps(
+    #     store, Cvals, Rvals, env, :realized_overlap;
+    #     title = "Realized prey-support overlap: mean_i avg_j |A_i∩A_j|/|A_i| — $(envname)",
+    #     outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn_smallerR_60x60.png",
+    #     fixed_colorbar = true
+    # )
+    # display(f4)
 
-    f5 = facet_heatmaps(
-        store, Cvals, Rvals, env, :achieved_r;
-        title = "Achieved mechanistic niche correlation — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn_smallerR_60x60.png",
-        fixed_colorbar = false
-    )
-    display(f5)
+    # f5 = facet_heatmaps(
+    #     store, Cvals, Rvals, env, :achieved_r;
+    #     title = "Achieved mechanistic niche correlation — $(envname)",
+    #     outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn_smallerR_60x60.png",
+    #     fixed_colorbar = false
+    # )
+    # display(f5)
 
-    f6 = facet_heatmaps(
-        store, Cvals, Rvals, env, :Creal;
-        title = "Realized connectance: L/S^2 — $(envname)",
-        outfile = "heatmaps_$(env)_diagnostic_Creaal_smallerConn_smallerR_60x60.png",
-        fixed_colorbar = false
-    )
-    display(f6)
+    # f6 = facet_heatmaps(
+    #     store, Cvals, Rvals, env, :Creal;
+    #     title = "Realized connectance: L/S^2 — $(envname)",
+    #     outfile = "heatmaps_$(env)_diagnostic_Creaal_smallerConn_smallerR_60x60.png",
+    #     fixed_colorbar = false
+    # )
+    # display(f6)
 end
 
 println("\nDone. Output directory:")
