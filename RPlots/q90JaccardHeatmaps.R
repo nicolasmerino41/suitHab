@@ -12,11 +12,11 @@ OUTDIR <- "output_jaccard_tail_60x60_"
 N_CONNECT <- 15
 N_CORR    <- 15
 
-Cvals <- seq(0.005, 0.1, length.out = N_CONNECT)
+Cvals <- seq(0.001, 0.1, length.out = N_CONNECT)
 Rvals <- seq(0.0, 0.9, length.out = N_CORR)
 
 ENVKINDS <- c("random", "autocorr")
-NETFAMS  <- c("random", "modular", "heavytail", "cascade")
+NETFAMS  <- c("Random", "Modular", "Heavytail", "Cascade")
 
 REGIMES <- c(
   "Narrow niche + low variance",
@@ -26,8 +26,10 @@ REGIMES <- c(
 )
 
 METRIC_LABELS <- c(
-  mismatch_q90 = "90th percentile of spatial mismatch\n(1 − Jaccard index)",
-  mismatch_frac_gt = "Fraction of consumers with strong mismatch\n(1 − J > 0.8)"
+  mismatch_q90 =
+    "90th percentile of spatial mismatch\n(1 − Jaccard index)",
+  mismatch_frac_gt =
+    "Fraction of consumers with strong mismatch\n(1 − J > 0.8)"
 )
 
 # ============================================================
@@ -93,100 +95,111 @@ heat_df$Regime <- factor(
 )
 
 # ============================================================
-# 3) FINAL POLISHED THEME (IDENTICAL STYLE)
+# 3) SAME THEME AS MEAN SCRIPT
 # ============================================================
 
-theme_heat_final <- function() {
-  theme_classic(base_family = "Arial", base_size = 14) +
+theme_heat_balanced <- function() {
+  theme_classic(base_family = "Arial", base_size = 13) +
     theme(
-      plot.margin = margin(20, 30, 20, 30),
-      
-      strip.text = element_text(size = 15, face = "bold"),
+      plot.margin = margin(12, 18, 12, 18),
+      strip.text = element_text(size = 12),
       strip.background = element_blank(),
-      
-      panel.spacing.x = unit(1.5, "lines"),
-      panel.spacing.y = unit(2, "lines"),
-      
+      panel.spacing.x = unit(1.2, "lines"),
+      panel.spacing.y = unit(1.6, "lines"),
       panel.border = element_rect(color = "black",
                                   fill = NA,
                                   linewidth = 0.4),
-      
       axis.title.x = element_text(
         face = "bold",
-        size = 16,
-        margin = margin(t = 16)
+        size = 15,
+        margin = margin(t = 14)
       ),
       axis.title.y = element_text(
         face = "bold",
-        size = 16,
-        margin = margin(r = 16)
+        size = 15,
+        margin = margin(r = 14)
       ),
-      
-      axis.text = element_text(size = 13, color = "black"),
-      
-      legend.position = "right",
+      axis.text = element_text(size = 12, color = "black"),
       legend.title = element_text(
         face = "bold",
-        size = 14,
-        margin = margin(b = 14)
+        size = 13,
+        margin = margin(b = 10)
       ),
-      legend.text = element_text(size = 12),
-      legend.key = element_blank()
+      legend.text = element_text(size = 11),
+      legend.position = "right"
     )
 }
 
 # ============================================================
-# 4) HEATMAP FUNCTION (SQUARED PANELS)
+# 4) IDENTICAL PLOT FUNCTION STRUCTURE
 # ============================================================
 
 plot_heatmap_metric <- function(metric_name,
                                 env_name,
-                                fixed_limits = TRUE) {
+                                fixed_limits = TRUE,
+                                horizontal_legend = FALSE) {
   
   df <- heat_df %>%
     filter(Metric == metric_name,
            Environment == env_name)
   
+  if (horizontal_legend) {
+    
+    fill_scale <- scale_fill_viridis_c(
+      option = "viridis",
+      guide = guide_colorbar(
+        direction = "horizontal",
+        title.position = "top",
+        title.hjust = 0.5,
+        barwidth  = unit(8, "cm"),
+        barheight = unit(0.5, "cm"),
+        frame.colour = "black",
+        ticks.colour = "black"
+      )
+    )
+    
+    legend_pos <- "bottom"
+    
+  } else {
+    
+    fill_scale <- scale_fill_viridis_c(
+      option = "viridis",
+      guide = guide_colorbar(
+        direction = "vertical",
+        title.position = "top",
+        title.hjust = 0.5,
+        label.position = "right",
+        barwidth  = unit(0.7, "cm"),
+        barheight = unit(6.5, "cm"),
+        frame.colour = "black",
+        ticks.colour = "black"
+      )
+    )
+    
+    legend_pos <- "right"
+  }
+  
   p <- ggplot(df,
               aes(x = Connectance,
                   y = NicheCorr,
                   fill = value)) +
-    
     geom_tile() +
-    
     facet_grid(Network ~ Regime) +
-    
-    coord_fixed() +   # square panels
-    
-    scale_x_continuous(
-      breaks = c(0.005, 0.04, 0.07, 0.10),
-      labels = sprintf("%.2f", c(0.005, 0.04, 0.07, 0.10)),
-      expand = c(0,0)
-    ) +
-    
+    scale_x_continuous(expand = c(0,0)) +
     scale_y_continuous(expand = c(0,0)) +
-    
     labs(
       x = "Connectance",
       y = "Niche correlation",
       fill = METRIC_LABELS[[metric_name]]
     ) +
-    
-    scale_fill_viridis_c(
-      option = "viridis",
-      limits = if (fixed_limits) c(0,1) else NULL,
-      guide = guide_colorbar(
-        direction = "vertical",
-        title.position = "top",
-        title.hjust = 0.5,
-        barwidth  = unit(0.9, "cm"),
-        barheight = unit(7, "cm"),
-        frame.colour = "black",
-        ticks.colour = "black"
-      )
-    ) +
-    
-    theme_heat_final()
+    fill_scale +
+    theme_heat_balanced()
+  
+  p <- p + theme(
+    legend.position = legend_pos,
+    legend.background = element_blank(),
+    legend.key = element_blank()
+  )
   
   return(p)
 }
@@ -201,7 +214,8 @@ for (env in ENVKINDS) {
     
     p <- plot_heatmap_metric(metric,
                              env,
-                             fixed_limits = TRUE)
+                             fixed_limits = TRUE,
+                             horizontal_legend = TRUE)
     
     ggsave(
       filename = file.path(
@@ -209,12 +223,11 @@ for (env in ENVKINDS) {
         paste0("ggplot_heatmap_", env, "_", metric, ".png")
       ),
       plot = p,
-      width = 16,
-      height = 11,
+      width = 12,
+      height = 10,
       dpi = 600
     )
   }
 }
 
-cat("Tail heatmaps (q90 and frac) exported separately for both environments.\n")
-
+cat("Tail heatmaps exported with identical formatting.\n")

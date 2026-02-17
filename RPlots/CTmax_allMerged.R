@@ -8,7 +8,7 @@ library(ggplot2)
 # 0) PATHS
 # -----------------------------
 project_root <- "."
-OUTROOT <- file.path(project_root, "FebruaryRestart/outputs_merged_all_ctmax")
+OUTROOT <- file.path(project_root, "RPlots/Plots/outputs_merged_all_ctmax")
 
 edge_file    <- file.path(OUTROOT, "edge_table.csv")
 pred_file    <- file.path(OUTROOT, "predator_level.csv")
@@ -129,6 +129,27 @@ ggsave(file.path(OUTROOT,
        p3, width = 9, height = 6, dpi = 600)
 
 # -----------------------------
+# 6A) NODE_LEVEL single colour
+#------------------------------
+p4 <- ggplot(pred_level,
+             aes(x = pred_ctmax,
+                 y = mean_prey_ctmax)) +
+  geom_point(size = 3, alpha = 0.95, color="black") +
+  geom_smooth(method = "lm", se = FALSE,
+              color = "black", linewidth = 0.8) +
+  labs(
+    title = "Predator vs Mean Prey CTmax (Node-level)",
+    x = "Predator CTmax",
+    y = "Mean prey CTmax",
+    color = "CTmax source"
+  ) +
+  theme_nature()
+
+ggsave(file.path(OUTROOT,
+                 "node_pred_vs_meanprey_color_single_color.png"),
+       p4, width = 9, height = 6, dpi = 600)
+
+# -----------------------------
 # 7) NULL HISTOGRAM
 # -----------------------------
 obs <- summary_df$obs_mean_absdiff[1]
@@ -166,3 +187,4 @@ ggsave(file.path(OUTROOT,
        p4, width = 9, height = 6, dpi = 600)
 
 cat("DONE\n")
+
