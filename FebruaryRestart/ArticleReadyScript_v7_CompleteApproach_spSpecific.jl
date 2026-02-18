@@ -57,8 +57,8 @@ const AUTOCORR_ALPHA = 0.55
 
 const CONNECTANCE_RANGE = (0.01, 0.1)
 const CORR_RANGE = (0.0, 0.9)
-const N_CONNECT = 15
-const N_CORR = 15
+const N_CONNECT = 12
+const N_CORR = 12
 
 const NREP = 15
 const TAIL_THRESH = 0.8
