@@ -8,7 +8,7 @@ library(ggplot2)
 # 0) PATHS
 # -----------------------------
 project_root <- "."
-OUTROOT <- file.path(project_root, "RPlots/Plots/outputs_merged_all_ctmax")
+OUTROOT <- file.path(project_root, "RPlots/Plots/outputs_merged_all_metrics/ctmax")
 
 edge_file    <- file.path(OUTROOT, "edge_table.csv")
 pred_file    <- file.path(OUTROOT, "predator_level.csv")

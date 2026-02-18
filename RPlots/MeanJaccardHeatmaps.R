@@ -27,7 +27,7 @@ REGIMES <- c(
 
 METRIC_LABELS <- c(
   dSrel = "Relative richness loss\n(1 − S[AB] / S[A])",
-  mean_jaccard_mismatch = "Mean spatial mismatch\n(1 − Jaccard index)",
+  mean_jaccard_mismatch = "Mean Jaccard mismatch",
   frac_affected = "Fraction of consumers affected",
   realized_overlap = "Realized prey-support overlap",
   achieved_r = "Achieved niche correlation",
@@ -96,6 +96,24 @@ heat_df$Regime <- factor(
   levels = REGIMES
 )
 
+# ------------------------------------------------------------
+# 2b) FILL MISSING CELLS (robust horizontal interpolation)
+# ------------------------------------------------------------
+
+heat_df <- heat_df %>%
+  arrange(Environment, Network, Regime, Metric,
+          NicheCorr, Connectance) %>%
+  group_by(Environment, Network, Regime, Metric, NicheCorr) %>%
+  mutate(
+    value = approx(
+      x = Connectance,
+      y = value,
+      xout = Connectance,
+      rule = 2   # allow edge extrapolation
+    )$y
+  ) %>%
+  ungroup()
+
 # ============================================================
 # 3) BALANCED THEME
 # ============================================================
@@ -104,7 +122,7 @@ theme_heat_balanced <- function() {
   theme_classic(base_family = "Arial", base_size = 13) +
     theme(
       plot.margin = margin(12, 18, 12, 18),
-      strip.text = element_text(size = 12), #face = "bold"),
+      strip.text = element_text(size = 13), #face = "bold"),
       strip.background = element_blank(),
       panel.spacing.x = unit(1.2, "lines"),
       panel.spacing.y = unit(1.6, "lines"),
@@ -144,17 +162,25 @@ plot_heatmap_metric <- function(metric_name,
     filter(Metric == metric_name,
            Environment == env_name)
   
+  # ------------------------------------------------------------
   # Legend configuration
+  # ------------------------------------------------------------
   if (horizontal_legend) {
     
     fill_scale <- scale_fill_viridis_c(
       option = "viridis",
       guide = guide_colorbar(
-        direction = "horizontal",   # ← THIS IS THE FIX
-        title.position = "top",
-        title.hjust = 0.5,
+        direction = "horizontal",
+        title.position = "left",
+        label.position = "bottom",
         barwidth  = unit(8, "cm"),
         barheight = unit(0.5, "cm"),
+        title.theme = element_text(
+          face = "bold",
+          size = 13,
+          hjust = 0.5,   # centered horizontally
+          vjust = 0.9    # pull upward
+        ),
         frame.colour = "black",
         ticks.colour = "black"
       )
@@ -167,7 +193,7 @@ plot_heatmap_metric <- function(metric_name,
     fill_scale <- scale_fill_viridis_c(
       option = "viridis",
       guide = guide_colorbar(
-        direction = "vertical",     # ← explicit
+        direction = "vertical",
         title.position = "top",
         title.hjust = 0.5,
         label.position = "right",
@@ -181,6 +207,9 @@ plot_heatmap_metric <- function(metric_name,
     legend_pos <- "right"
   }
   
+  # ------------------------------------------------------------
+  # Base plot
+  # ------------------------------------------------------------
   p <- ggplot(df,
               aes(x = Connectance,
                   y = NicheCorr,
@@ -197,18 +226,42 @@ plot_heatmap_metric <- function(metric_name,
     fill_scale +
     theme_heat_balanced()
   
-  # APPLY legend position LAST (critical)
-  p <- p + theme(
-    legend.position = legend_pos,
-    legend.title = element_text(
-      face = "bold",
-      size = 13,
-      margin = margin(b = 12)
-    ),
-    legend.text = element_text(size = 11),
-    legend.background = element_blank(),
-    legend.key = element_blank()
-  )
+  # ------------------------------------------------------------
+  # Legend styling
+  # ------------------------------------------------------------
+  if (horizontal_legend) {
+    
+    p <- p + theme(
+      legend.position = legend_pos,
+      
+      legend.title = element_text(
+        face = "bold",
+        size = 13,
+        hjust = 0,      # left align text inside the box
+        vjust = 1.2,
+        margin = margin(r = 10)
+      )
+      ,
+      
+      legend.text = element_text(size = 11),
+      legend.background = element_blank(),
+      legend.key = element_blank()
+    )
+    
+  } else {
+    
+    p <- p + theme(
+      legend.position = legend_pos,
+      legend.title = element_text(
+        face = "bold",
+        size = 13,
+        margin = margin(b = 12)
+      ),
+      legend.text = element_text(size = 11),
+      legend.background = element_blank(),
+      legend.key = element_blank()
+    )
+  }
   
   return(p)
 }

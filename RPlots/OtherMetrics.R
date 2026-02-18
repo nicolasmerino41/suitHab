@@ -6,9 +6,9 @@ library(tidyverse)
 # PATH
 # ============================================================
 
-OUTROOT <- "FebruaryRestart/outputs_merged_all_metrics"
+OUTROOT <- "RPlots/Plots/outputs_merged_all_metrics"
 
-TRAITS <- c("lt50", "ltmin", "ltmax", "ctmin")
+TRAITS <- c("lt50", "ltmin", "ltmax", "ctmin", "ctmax")
 
 # ============================================================
 # FUNCTION: scatter + lm + stats + n
