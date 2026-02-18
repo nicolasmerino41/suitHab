@@ -92,13 +92,42 @@ n_nodes = [
     4838, 66, 88, 1809, 499, 11365, 268
 ]
 
-@assert length(mean_degree) == length(type_of_network) == length(n_nodes)
+net_names = [
+    "Switzerland", "TETRA-EU", "German Bight", "Barent Sea", "Northern European",
+    "European Crop Pests", "Eurasian Rodent Flea", "Brazilian Ant-Tree", "South Korea Freshwater",
+    "Cedar Creek Arthropods", "Jena experiment Arthropods", "New Zealand Plant-herbivore-host",
+    "Marine Antarctic", "Adirondacks Lake", "Florida Keys", "Pollen-insect Australia", "Global Plant-frugivore",
+    "Southwest China", "Brazilian Forest", "California Rocky Intertidal", "Baja California Estuaries",
+    "Marine Global", "Argentinian Pampas"
+]
 
-# --- sort while keeping type + n_nodes aligned ---
+@assert length(mean_degree) == length(type_of_network) == length(n_nodes) == length(net_names)
+
+# -----------------------------
+# SETTINGS
+# -----------------------------
+x_ref = 6.25
+
+# Legend order you want (this ALSO defines the color mapping)
+legend_order = [
+    "Trophic",
+    "Parasitic",
+    "Mutualistic",
+    "Trophic, parasitic",
+    "Trophic, parasitic, mutualistic"
+]
+
+# Normalize type strings (keeps your current capitalization as-is, just trims whitespace)
+normalize_type(s::AbstractString) = strip(s)
+
+# -----------------------------
+# SORT, keeping metadata aligned
+# -----------------------------
 perm = sortperm(mean_degree)
 xs = mean_degree[perm]
-ts = type_of_network[perm]
+ts = normalize_type.(type_of_network[perm])
 ns = Float64.(n_nodes[perm])
+names_sorted = net_names[perm]
 
 n = length(xs)
 y = 1:n
@@ -110,51 +139,66 @@ tickvals = [1, 2, 3.3191, 5, 10, 20, 50, 100, 200, 300]
 tickvals = filter(t -> minimum(xs) <= t <= maximum(xs), tickvals)
 ticklabs = [@sprintf("%.0f", t) for t in tickvals]
 
-x_ref = 6.25
+# -----------------------------
+# COLOR MAPPING (fixed to legend_order)
+# -----------------------------
+missing_types = setdiff(unique(ts), legend_order)
+@assert isempty(missing_types) "Types not in legend_order: $(collect(missing_types))"
 
-# --- color mapping by type ---
-types = sort(unique(ts))
-type_to_idx = Dict(t => i for (i, t) in enumerate(types))
-cidx = [type_to_idx[t] for t in ts]
+type_to_idx = Dict(t => i for (i, t) in enumerate(legend_order))
+cidx = [type_to_idx[t] for t in ts]  # THIS is used for points and legend
 
-# --- size mapping by richness (log-scaled then rescaled to pixels) ---
-# choose pixel range that looks good
+# -----------------------------
+# SIZE MAPPING (log-scaled richness)
+# -----------------------------
 min_px, max_px = 7.0, 22.0
-
-s_raw = log10.(ns)                       # compress 16..23020 nicely
+s_raw = log10.(ns)
 smin, smax = minimum(s_raw), maximum(s_raw)
 markersizes = (s_raw .- smin) ./ (smax - smin + eps()) .* (max_px - min_px) .+ min_px
 
+# -----------------------------
+# PLOT
+# -----------------------------
 begin
-    fig = Figure(size = (1050, 520))
+    fig = Figure(size = (1200, 700))
     ax = Axis(fig[1, 1];
-        xlabel = "Mean number of interactions per species",
-        ylabel = "Sorted Rank",
-        title  = "Mean degree across systems",
+        xlabel = "Mean number of interactions per species (log-scale)",
+        ylabel = "Community Rank",
+        # title  = "Mean degree across systems",
         xscale = log10,
         xticks = (tickvals, ticklabs),
         xgridvisible = false,
         ygridvisible = false
     )
 
+    # median + IQR (draw early so it sits behind points)
+    # vspan!(ax, q25, q75; color = (:black, 0.06))
+    vlines!(ax, m; linestyle = :dash, linewidth = 2)
+
     # stems
     for (xi, yi) in zip(xs, y)
         lines!(ax, [minimum(xs), xi], [yi, yi]; color = (:black, 0.10))
     end
 
-    # points with color + size
+    # points (colored + sized) — uses the SAME cidx mapping as the legend
     scatter!(ax, xs, y;
         markersize = markersizes,
         color = cidx,
         colormap = :tab10,
-        colorrange = (1, length(types))
+        colorrange = (1, length(legend_order))
     )
 
-    # median + IQR
-    vlines!(ax, m; linestyle = :dash, linewidth = 2)
-    # vspan!(ax, q25, q75; color = (:black, 0.06))
+    # labels next to points
+    for i in 1:n
+        text!(ax, xs[i], y[i];
+            text = names_sorted[i],
+            align = (:left, :center),
+            offset = (10, 0),
+            fontsize = 10
+        )
+    end
 
-    # simulation reference
+    # simulation reference marker + barrier line
     vlines!(ax, x_ref; color = :red, linewidth = 3, linestyle = :dash)
     scatter!(ax, [x_ref], [0.0]; marker = :star5, markersize = 18, color = :red)
     text!(ax, x_ref, 0.0;
@@ -163,25 +207,34 @@ begin
         offset = (12, 0)
     )
 
-    xlims!(ax, minimum(xs) * 0.9, maximum(xs) * 1.05)
+    # room for labels and ref point
+    xlims!(ax, minimum(xs) * 0.9, maximum(xs) * 1.35)
     ylims!(ax, -1, n + 1)
 
-    # legend for colors (same robust trick as before)
+    # -----------------------------
+    # LEGEND UNDERNEATH (colors match because mapping is fixed)
+    # We create one dummy handle per legend_order entry.
+    # -----------------------------
     legend_handles = Any[]
-    legend_labels = String[]
-    for (i, t) in enumerate(types)
+    for (i, _) in enumerate(legend_order)
         h = scatter!(ax, [NaN], [NaN];
-            color = i, colormap = :tab10, colorrange = (1, length(types)),
+            color = i,
+            colormap = :tab10,
+            colorrange = (1, length(legend_order)),
             markersize = 10
         )
         push!(legend_handles, h)
-        push!(legend_labels, t)
     end
-    Legend(fig[1, 2], legend_handles, legend_labels, "Network type")
 
-    # optional: add a tiny size guide (text only; avoids extra complexity)
-    Label(fig[2, 1], "Dot size ∝ log10(Nodes)  (min=$(Int(minimum(ns)))  max=$(Int(maximum(ns))))",
-        tellwidth=false)
+    Legend(fig[2, 1], legend_handles, legend_order, "Network type";
+        orientation = :horizontal,
+        tellwidth = false,
+        framevisible = false,
+        nbanks = 1
+    )
+
+    rowgap!(fig.layout, 10)
 
     display(fig)
+
 end
