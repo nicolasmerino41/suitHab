@@ -50,7 +50,7 @@ const BASAL_FRAC = 0.30  # basal species fraction
 
 # Spatial viability filter (movement/connectivity proxy)
 const USE_CONNECTIVITY_FILTER = true
-const Emin_patch = 60  # LCC threshold for persistence (set smaller if you want less stringent)
+const Emin_patch = 50  # LCC threshold for persistence (set smaller if you want less stringent)
 
 # Environmental field domain (e.g., temperature)
 const E_MIN = 0.0
@@ -65,13 +65,13 @@ const AUTOCORR_ITERS = 18
 const AUTOCORR_ALPHA = 0.55  # 0..1 (higher = smoother)
 
 # Sweep axes
-const CONNECTANCE_RANGE = (0.01, 0.1)
-const CORR_RANGE       = (0.0, 0.9)
-const N_CONNECT = 12
-const N_CORR    = 12
+const CONNECTANCE_RANGE = (0.005, 0.15)
+const CORR_RANGE       = (0.0, 1.0)
+const N_CONNECT = 15
+const N_CORR    = 15
 
 # Replicates per heatmap cell (increase for final)
-const NREP = 15
+const NREP = 20
 
 # Network-family knobs
 const N_MODULES = 6
@@ -90,7 +90,7 @@ const BASE_SEED = 20260202
 
 # Output directory
 # ts = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
-OUTDIR = joinpath(pwd(), "output_biotic_divergence_")
+OUTDIR = joinpath(pwd(), "RPlots/Plots/MeanJaccardMismatch_heatmaps/data")
 isdir(OUTDIR) || mkpath(OUTDIR)
 
 # ============================================================
@@ -896,8 +896,8 @@ function regime_name(reg::BreadthRegime)
 end
 
 function sweep_all()
-    Cvals = collect(range(0.01, 0.1, length=N_CONNECT))
-    Rvals = collect(range(0.0, 0.9, length=N_CORR))
+    Cvals = collect(range(CONNECTANCE_RANGE[1], CONNECTANCE_RANGE[2], length=N_CONNECT))
+    Rvals = collect(range(CORR_RANGE[1], CORR_RANGE[2], length=N_CORR))
 
     # Store: Dict keyed by (env, netfam, regime_index, metric) => Matrix(N_CORR, N_CONNECT)
     metrics = [:dSrel, :mean_jaccard_mismatch, :frac_affected, :realized_overlap, :achieved_r, :Creal]
@@ -1100,18 +1100,18 @@ end
 store, Cvals, Rvals = sweep_all()
 using Serialization
 
-# cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange_60x60cells.jls")
-# serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
-# println("Saved sweep cache to: ", cache_path)
+cache_path = joinpath(OUTDIR, "FinalSweep_conn0_005to0_15_corr0to1_20reps_range15_emin50_60x60grid.jls")
+serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
+println("Saved sweep cache to: ", cache_path)
 
-cache_path = joinpath(OUTDIR, "sweep_cache_smallerConn_001_smallerRrange_60x60cells.jls")
-data = deserialize(cache_path)
+# cache_path = joinpath(OUTDIR, "FinalSweep_conn0_005to0_15_corr0to1_20reps_range15_emin50_60x60grid.jls")
+# data = deserialize(cache_path)
 
-store = data.store
-Cvals = data.Cvals
-Rvals = data.Rvals
+# store = data.store
+# Cvals = data.Cvals
+# Rvals = data.Rvals
 
-println("Loaded sweep cache from: ", cache_path)
+# println("Loaded sweep cache from: ", cache_path)
 
 # Save numeric matrices as TSV (simple, no external packages)
 function save_matrix_tsv(path::String, M::Matrix{Float64})
@@ -1132,58 +1132,59 @@ for env in ENVKINDS, net in NETFAMS, (ri, reg) in enumerate(regimes)
     end
 end
 
-# Plot heatmaps for the 3 main divergence metrics + realized overlap (mediator diagnostic)
-for env in ENVKINDS
-    envname = env == :random ? "Random environment" : "Autocorrelated environment"
+# println("Done.")
+# # Plot heatmaps for the 3 main divergence metrics + realized overlap (mediator diagnostic)
+# for env in ENVKINDS
+#     envname = env == :random ? "Random environment" : "Autocorrelated environment"
 
-    # f1 = facet_heatmaps(
-    #     store, Cvals, Rvals, env, :dSrel;
-    #     title = "Relative richness loss (consumers-only): 1 - S_AB / S_A — $(envname)",
-    #     outfile = "heatmaps_$(env)_metric_dSrel_smallerConn_smallerR_60x60.png",
-    #     fixed_colorbar = true
-    # )
-    # display(f1)
+#     # f1 = facet_heatmaps(
+#     #     store, Cvals, Rvals, env, :dSrel;
+#     #     title = "Relative richness loss (consumers-only): 1 - S_AB / S_A — $(envname)",
+#     #     outfile = "heatmaps_$(env)_metric_dSrel_smallerConn_smallerR_60x60.png",
+#     #     fixed_colorbar = true
+#     # )
+#     # display(f1)
 
-    f2 = facet_heatmaps(
-        store, Cvals, Rvals, env, :mean_jaccard_mismatch;
-        title = "Mean per-species Jaccard mismatch (consumers-only): mean(1 - J(A_i,AB_i)) — $(envname)",
-        outfile = "heatmaps_$(env)_metric_mean_jaccard_mismatch_smallerConn_smallerR_60x60.png",
-        # fixed_colorbar = true
-    )
-    display(f2)
+#     f2 = facet_heatmaps(
+#         store, Cvals, Rvals, env, :mean_jaccard_mismatch;
+#         title = "Mean per-species Jaccard mismatch (consumers-only): mean(1 - J(A_i,AB_i)) — $(envname)",
+#         outfile = "heatmaps_$(env)_metric_mean_jaccard_mismatch_smallerConn_smallerR_60x60.png",
+#         # fixed_colorbar = true
+#     )
+#     display(f2)
 
-    # f3 = facet_heatmaps(
-    #     store, Cvals, Rvals, env, :frac_affected;
-    #     title = "Fraction affected (consumers-only): frac(A_i != AB_i) — $(envname)",
-    #     outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn_smallerR_60x60.png",
-    #     fixed_colorbar = true
-    # )
-    # display(f3)
+#     # f3 = facet_heatmaps(
+#     #     store, Cvals, Rvals, env, :frac_affected;
+#     #     title = "Fraction affected (consumers-only): frac(A_i != AB_i) — $(envname)",
+#     #     outfile = "heatmaps_$(env)_metric_frac_affected_smallerConn_smallerR_60x60.png",
+#     #     fixed_colorbar = true
+#     # )
+#     # display(f3)
 
-    # f4 = facet_heatmaps(
-    #     store, Cvals, Rvals, env, :realized_overlap;
-    #     title = "Realized prey-support overlap: mean_i avg_j |A_i∩A_j|/|A_i| — $(envname)",
-    #     outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn_smallerR_60x60.png",
-    #     fixed_colorbar = true
-    # )
-    # display(f4)
+#     # f4 = facet_heatmaps(
+#     #     store, Cvals, Rvals, env, :realized_overlap;
+#     #     title = "Realized prey-support overlap: mean_i avg_j |A_i∩A_j|/|A_i| — $(envname)",
+#     #     outfile = "heatmaps_$(env)_diagnostic_realized_overlap_smallerConn_smallerR_60x60.png",
+#     #     fixed_colorbar = true
+#     # )
+#     # display(f4)
 
-    # f5 = facet_heatmaps(
-    #     store, Cvals, Rvals, env, :achieved_r;
-    #     title = "Achieved mechanistic niche correlation — $(envname)",
-    #     outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn_smallerR_60x60.png",
-    #     fixed_colorbar = false
-    # )
-    # display(f5)
+#     # f5 = facet_heatmaps(
+#     #     store, Cvals, Rvals, env, :achieved_r;
+#     #     title = "Achieved mechanistic niche correlation — $(envname)",
+#     #     outfile = "heatmaps_$(env)_diagnostic_achieved_r_smallerConn_smallerR_60x60.png",
+#     #     fixed_colorbar = false
+#     # )
+#     # display(f5)
 
-    # f6 = facet_heatmaps(
-    #     store, Cvals, Rvals, env, :Creal;
-    #     title = "Realized connectance: L/S^2 — $(envname)",
-    #     outfile = "heatmaps_$(env)_diagnostic_Creaal_smallerConn_smallerR_60x60.png",
-    #     fixed_colorbar = false
-    # )
-    # display(f6)
-end
+#     # f6 = facet_heatmaps(
+#     #     store, Cvals, Rvals, env, :Creal;
+#     #     title = "Realized connectance: L/S^2 — $(envname)",
+#     #     outfile = "heatmaps_$(env)_diagnostic_Creaal_smallerConn_smallerR_60x60.png",
+#     #     fixed_colorbar = false
+#     # )
+#     # display(f6)
+# end
 
-println("\nDone. Output directory:")
-println(OUTDIR)
+# println("\nDone. Output directory:")
+# println(OUTDIR)
