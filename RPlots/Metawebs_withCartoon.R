@@ -5,7 +5,78 @@ library(RColorBrewer)
 
 OUTROOT <- "RPlots/Plots"
 TRAITS  <- c("ctmin", "lt50", "ctmax", "ltmax")
-OUTPUT_FILE <- "RPlots/Plots/MetawebCompilation.png"
+OUTPUT_FILE <- "RPlots/Plots/MetawebCompilation_PlusCartoon.png"
+
+cartoon_xmin <- xmax * 0.62
+cartoon_xmax <- xmax *1.2
+
+cartoon_ymin <- 0.5
+cartoon_ymax <- 20
+
+# total height available
+total_height <- cartoon_ymax - cartoon_ymin
+
+# give each network equal height
+net_height <- total_height * 0.35
+
+# vertical gap for arrow
+gap <- total_height * 0.12
+
+# Bottom network box
+bottom_ymin <- cartoon_ymin
+bottom_ymax <- bottom_ymin + net_height
+
+# Top network box
+top_ymax <- cartoon_ymax
+top_ymin <- top_ymax - net_height
+
+make_cartoon_network <- function(connectance = 0.1,
+                                 xmin, xmax,
+                                 ymin, ymax) {
+  
+  set.seed(1)
+  n <- 100
+  
+  nodes <- tibble(
+    id = 1:n,
+    x = runif(n),
+    y = runif(n)
+  )
+  
+  # scale to rectangle
+  nodes <- nodes |>
+    mutate(
+      x = xmin + x * (xmax - xmin),
+      y = ymin + y * (ymax - ymin)
+    )
+  
+  edges <- expand.grid(i = 1:n, j = 1:n) |>
+    filter(i < j) |>
+    sample_frac(connectance) |>
+    left_join(nodes, by = c("i" = "id")) |>
+    rename(x1 = x, y1 = y) |>
+    left_join(nodes, by = c("j" = "id")) |>
+    rename(x2 = x, y2 = y)
+  
+  list(nodes = nodes, edges = edges)
+}
+
+net_sparse <- make_cartoon_network(
+  connectance = 0.01,
+  xmin = cartoon_xmin,
+  xmax = cartoon_xmax,
+  ymin = bottom_ymin,
+  ymax = bottom_ymax
+)
+
+net_dense <- make_cartoon_network(
+  connectance = 0.03,
+  xmin = cartoon_xmin,
+  xmax = cartoon_xmax,
+  ymin = top_ymin,
+  ymax = top_ymax
+)
+
 
 mean_degree <- c(
   96.1992, 253.1312, 21.3818, 19.0386, 27.4189, 17.5256, 23.7921, 14.7914,
@@ -88,6 +159,11 @@ df <- df |>
 
 average_y <- 3 * rank_spacing
 
+arrow_x <- (cartoon_xmin + cartoon_xmax) / 2
+
+arrow_y_start <- bottom_ymax + gap * 0.3
+arrow_y_end   <- top_ymin - gap * 0.1
+
 p1 = ggplot(df, aes(x = mean_degree, y = rank)) +
   
   # ---- Reference line FIRST (so it stays behind) ----
@@ -158,6 +234,39 @@ annotate("point",
            size = 3.2,
            fontface = "bold") +
   
+# ---- Sparse network ----
+geom_segment(data = net_sparse$edges,
+           aes(x = x1, y = y1, xend = x2, yend = y2),
+           inherit.aes = FALSE,
+           linewidth = 0.4) +
+
+geom_point(data = net_sparse$nodes,
+           aes(x = x, y = y),
+           inherit.aes = FALSE,
+           size = 2) +
+
+# ---- Dense network ----
+geom_segment(data = net_dense$edges,
+           aes(x = x1, y = y1, xend = x2, yend = y2),
+           inherit.aes = FALSE,
+           linewidth = 0.4) +
+
+geom_point(data = net_dense$nodes,
+           aes(x = x, y = y),
+           inherit.aes = FALSE,
+           size = 2) +
+
+# ---- Double arrow ----
+annotate("segment",
+         x = arrow_x,
+         xend = arrow_x,
+         y = arrow_y_start,
+         yend = arrow_y_end,
+         arrow = arrow(type = "closed",
+                       ends = "both",
+                       length = unit(0.35, "cm")),
+         linewidth = 1.2) +
+  
   scale_x_log10(
     breaks = tickvals,
     labels = label_number(accuracy = 1)
@@ -181,13 +290,12 @@ annotate("point",
     end = 0.9,
     guide = "none"
   ) +
-
-  coord_cartesian(
-  xlim = c(left_limit, xmax * 1.45),
-
-    ylim = c(-0, max(df$rank)),
-    clip = "off"
-  ) +
+  
+    coord_cartesian(
+      xlim = c(left_limit, xmax * 1.30),
+      ylim = c(0, max(df$rank)),
+      clip = "off"
+    ) +
   
   labs(
     x = "Mean degree (log scale)",
@@ -207,7 +315,7 @@ annotate("point",
     
     axis.line = element_line(linewidth = 0.6),
     
-    plot.margin = margin(10, 180, 10, 10)
+    plot.margin = margin(10, 20, 10, 10)
   ) +
   
   theme(
@@ -233,4 +341,5 @@ ggsave(
   height = 8.5,
   dpi = 600
 )
+
 

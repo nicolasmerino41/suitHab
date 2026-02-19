@@ -9,13 +9,12 @@ library(viridis)
 # ============================================================
 
 OUTROOT <- "RPlots/Plots/outputs_merged_all_metrics"
-TRAITS  <- c("ctmin", "lt50", "ctmax", "ltmax")
-OUTPUT_FILE <- "NODE_combined_with_niche_colored_background.png"
+TRAITS  <- c("ctmin", "ctmax", "lt50", "ltmax")
+OUTPUT_FILE <- "RPlots/Plots/NODE_combined_with_niche_colored_background.png"
 
 # ============================================================
 # PUBLICATION THEME (background injected later)
 # ============================================================
-
 theme_nature <- function(bg_color = "white") {
   theme_classic(base_family = "Arial", base_size = 15) +
     theme(
@@ -42,7 +41,6 @@ theme_nature <- function(bg_color = "white") {
 # ============================================================
 # NICHE CARTOON FIRST (compute colours here)
 # ============================================================
-
 x <- seq(-3.5, 3.5, length.out = 5000)
 y <- dnorm(x)
 ymax <- max(y)
@@ -67,9 +65,9 @@ get_label_colour <- function(x_pos) {
 # Manually chosen x-positions
 trait_positions <- c(
   ctmin = -2.2,
-  lt50  =  1.7,
-  ctmax =  2.2,
-  ltmax =  2.7
+  lt50  =  2.4,
+  ctmax =  1.9,
+  ltmax =  2.9
 )
 
 # Compute exact label colours
@@ -113,6 +111,16 @@ p_niche <- ggplot(niche_tiles) +
     axis.ticks.x = element_blank(),
     axis.text.y = element_blank(),
     axis.ticks.y = element_blank(),
+    
+    axis.title.x = element_text(
+      margin = margin(t = 15), face = "bold"
+    ),
+    
+    axis.title.y = element_text(
+      margin = margin(r = 4),
+      vjust = 0.5, face = "bold"
+    ),
+    
     plot.margin = margin(t = 30, r = 10, b = 10, l = 10)
   )
 
@@ -142,14 +150,20 @@ add_metric_label <- function(p, x_pos, y_text, label, fill_col) {
              label.padding = unit(0.35, "lines"))
 }
 
-p_niche <- add_metric_label(p_niche, -2.2, 0.26, "CTmin", trait_colors["ctmin"])
-p_niche <- add_metric_label(p_niche,  1.7,  0.36, "LT50",  trait_colors["lt50"])
-p_niche <- add_metric_label(p_niche,  2.2,  0.26, "CTmax", trait_colors["ctmax"])
-p_niche <- add_metric_label(p_niche,  2.7,  0.16, "LTmax", trait_colors["ltmax"])
+p_niche <- add_metric_label(p_niche, -2.2, 0.31, "CTmin", trait_colors["ctmin"])
+p_niche <- add_metric_label(p_niche,  1.9,  0.35, "CTmax",  trait_colors["ctmax"])
+p_niche <- add_metric_label(p_niche,  2.4,  0.28, "LT50", trait_colors["lt50"])
+p_niche <- add_metric_label(p_niche,  2.9,  0.21, "LTmax", trait_colors["ltmax"])
 
 # ============================================================
 # NODE-LEVEL PANEL FUNCTION (uses computed background)
 # ============================================================
+title_map <- c(
+  ctmin = "CTmin",
+  ctmax = "CTmax",
+  lt50  = "LT50",
+  ltmax = "LTmax"
+)
 
 make_node_plot <- function(trait, bg_color) {
   
@@ -176,7 +190,7 @@ make_node_plot <- function(trait, bg_color) {
   n  <- nrow(df)
   r  <- cor(df$pred_trait, df$mean_prey_trait)
   
-  label_text <- paste0("n = ", n,
+  label_text <- paste0("N = ", n,
                        "\nr = ", round(r, 2))
   
   ggplot(df,
@@ -200,7 +214,7 @@ make_node_plot <- function(trait, bg_color) {
              color = "black") +
     
     labs(
-      title = toupper(trait),
+      title = title_map[[trait]],
       x = "Predator thermal limit (°C)",
       y = "Mean prey thermal limit (°C)"
     ) +
@@ -227,12 +241,12 @@ final_plot <-
   top_row /
   plot_spacer() /
   p_niche +
-  plot_layout(heights = c(2.2, 0.12, 1.2))
+  plot_layout(heights = c(1.5, 0.0, 0.5))
 
 ggsave(
   OUTPUT_FILE,
   final_plot,
-  width = 18,
+  width = 20,
   height = 8.5,
   dpi = 600
 )

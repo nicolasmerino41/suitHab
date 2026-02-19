@@ -7,13 +7,13 @@ library(viridis)
 # 0) PATHS
 # ============================================================
 
-OUTDIR <- "output_jaccard_tail_60x60_"
+OUTDIR <- "Rplots/Plots/q90JaccardMismatch_heatmaps/data"
 
-N_CONNECT <- 12
-N_CORR    <- 12
+N_CONNECT <- 15
+N_CORR    <- 15
 
-Cvals <- seq(0.001, 0.1, length.out = N_CONNECT)
-Rvals <- seq(0.0, 0.9, length.out = N_CORR)
+Cvals <- seq(0.005, 0.15, length.out = N_CONNECT)
+Rvals <- seq(0.0, 1.0, length.out = N_CORR)
 
 ENVKINDS <- c("random", "autocorr")
 NETFAMS  <- c("Random", "Modular", "Heavytail", "Cascade")
@@ -116,12 +116,11 @@ heat_df <- heat_df %>%
 # ============================================================
 # 3) SAME BALANCED THEME
 # ============================================================
-
 theme_heat_balanced <- function() {
   theme_classic(base_family = "Arial", base_size = 13) +
     theme(
       plot.margin = margin(12, 18, 12, 18),
-      strip.text = element_text(size = 13),
+      strip.text = element_text(size = 13), #face = "bold"),
       strip.background = element_blank(),
       panel.spacing.x = unit(1.2, "lines"),
       panel.spacing.y = unit(1.6, "lines"),
@@ -139,6 +138,11 @@ theme_heat_balanced <- function() {
         margin = margin(r = 14)
       ),
       axis.text = element_text(size = 12, color = "black"),
+      axis.text.x = element_text(
+        angle = 45,
+        hjust = 1,
+        vjust = 1
+      ),
       legend.title = element_text(
         face = "bold",
         size = 13,
@@ -216,7 +220,24 @@ plot_heatmap_metric <- function(metric_name,
                   fill = value)) +
     geom_tile() +
     facet_grid(Network ~ Regime) +
-    scale_x_continuous(expand = c(0,0)) +
+    scale_x_continuous(
+      breaks = seq(0.005, 0.15, length.out = 5),
+      labels = function(x) {
+        x_round <- round(x / 0.005) * 0.005
+        
+        sapply(x_round, function(val) {
+          # Check if the third decimal is zero
+          third_decimal <- round(val * 1000) %% 10
+          
+          if (third_decimal == 0) {
+            sprintf("%.2f", val)  # ends in 0 → use 2 decimals
+          } else {
+            sprintf("%.3f", val)  # otherwise → 3 decimals
+          }
+        })
+      },
+      expand = c(0, 0)
+    ) +
     scale_y_continuous(expand = c(0,0)) +
     labs(
       x = "Connectance",
@@ -278,7 +299,7 @@ for (env in ENVKINDS) {
     ggsave(
       filename = file.path(
         OUTDIR,
-        paste0("ggplot_heatmap_", env, "_", metric, ".png")
+        paste0("../heatmap_", env, "_", metric, ".png")
       ),
       plot = p,
       width = 12,
