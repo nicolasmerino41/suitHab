@@ -45,7 +45,7 @@ const S = 250
 const BASAL_FRAC = 0.30
 
 const USE_CONNECTIVITY_FILTER = true
-const Emin_patch = 60
+const Emin_patch = 50
 
 const E_MIN = 0.0
 const E_MAX = 100.0
@@ -55,12 +55,12 @@ const SUIT_THRESH = 0.25
 const AUTOCORR_ITERS = 18
 const AUTOCORR_ALPHA = 0.55
 
-const CONNECTANCE_RANGE = (0.01, 0.1)
-const CORR_RANGE = (0.0, 0.9)
-const N_CONNECT = 12
-const N_CORR = 12
+const CONNECTANCE_RANGE = (0.005, 0.15)
+const CORR_RANGE = (0.0, 1.0)
+const N_CONNECT = 15
+const N_CORR = 15
 
-const NREP = 15
+const NREP = 20
 const TAIL_THRESH = 0.8
 
 const N_MODULES = 6
@@ -727,7 +727,7 @@ const NETFAMS  = [:random, :modular, :heavytail, :cascade]
 
 function sweep_all()
     Cvals = collect(range(CONNECTANCE_RANGE[1], CONNECTANCE_RANGE[2], length=N_CONNECT))
-    Rvals = collect(range(0.0, 0.9, length=N_CORR))
+    Rvals = collect(range(CORR_RANGE[1], CORR_RANGE[2], length=N_CORR))
 
     metrics = [:mismatch_q90, :mismatch_frac_gt, :achieved_r, :Creal]
     store = Dict{Tuple{Symbol,Symbol,Int,Symbol}, Matrix{Float64}}()
@@ -989,28 +989,28 @@ println("OUTDIR: ", OUTDIR)
 store, Cvals, Rvals = sweep_all()
 
 # --- Save cache
-cache_path = joinpath(OUTDIR, "sweep_cache_jaccard_tail.jls")
+cache_path = joinpath(OUTDIR, "FinalSweepJaccardTail_conn0_005to0_15_corr0to1_20reps_range15_emin50_60x60grid.jls")
 serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
 println("Saved sweep cache to: ", cache_path)
 
-# --- Heatmaps (unchanged behaviour)
-for env in ENVKINDS
-    envname = env == :random ? "Random environment" : "Autocorrelated environment"
+# # --- Heatmaps (unchanged behaviour)
+# for env in ENVKINDS
+#     envname = env == :random ? "Random environment" : "Autocorrelated environment"
 
-    f1 = facet_heatmaps(
-        store, Cvals, Rvals, env, :mismatch_q90;
-        title = "Jaccard mismatch tail: q90 of (1 - J(A,AB)) — $(envname)",
-        outfile = "heatmaps_$(env)_mismatch_q90.png"
-    )
-    display(f1)
+#     f1 = facet_heatmaps(
+#         store, Cvals, Rvals, env, :mismatch_q90;
+#         title = "Jaccard mismatch tail: q90 of (1 - J(A,AB)) — $(envname)",
+#         outfile = "heatmaps_$(env)_mismatch_q90.png"
+#     )
+#     display(f1)
 
-    f2 = facet_heatmaps(
-        store, Cvals, Rvals, env, :mismatch_frac_gt;
-        title = "Jaccard mismatch tail: frac(1 - J(A,AB) > $(TAIL_THRESH)) — $(envname)",
-        outfile = "heatmaps_$(env)_mismatch_frac_gt.png"
-    )
-    display(f2)
-end
+#     f2 = facet_heatmaps(
+#         store, Cvals, Rvals, env, :mismatch_frac_gt;
+#         title = "Jaccard mismatch tail: frac(1 - J(A,AB) > $(TAIL_THRESH)) — $(envname)",
+#         outfile = "heatmaps_$(env)_mismatch_frac_gt.png"
+#     )
+#     display(f2)
+# end
 
 # ============================================================
 # 14) EXPORT NUMERIC MATRICES FOR R
