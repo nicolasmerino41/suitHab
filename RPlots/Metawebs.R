@@ -48,7 +48,7 @@ legend_order <- c(
   "Trophic, parasitic, mutualistic"
 )
 
-x_ref <- 6.25
+x_ref <- 6.43
 
 df <- tibble(
   mean_degree = mean_degree,
@@ -152,7 +152,7 @@ annotate("point",
   annotate("text",
            x = x_ref -1.75,
            y =20,
-           label = "Simulation reference (6.25)",
+           label = "Simulation reference (6.43)",
            hjust = 0,
            vjust = -0.5,
            size = 3.2,

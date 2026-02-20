@@ -7,7 +7,7 @@ library(viridis)
 # 0) PATHS
 # ============================================================
 
-OUTDIR <- "Rplots/Plots/q90JaccardMismatch_heatmaps/data"
+OUTDIR <- "Rplots/Plots/q90JaccardMismatch_heatmaps/data_tail01"
 
 N_CONNECT <- 15
 N_CORR    <- 15
@@ -29,7 +29,7 @@ METRIC_LABELS <- c(
   mismatch_q90 =
     "90th percentile of Jaccard mismatch",
   mismatch_frac_gt =
-    "Fraction of consumers with strong mismatch\n(Jaccard mismatch > 0.8)"
+    "Fraction of consumers with strong mismatch\n(Jaccard mismatch > 0.1)"
 )
 
 # ============================================================
@@ -299,7 +299,7 @@ for (env in ENVKINDS) {
     ggsave(
       filename = file.path(
         OUTDIR,
-        paste0("../heatmap_", env, "_", metric, ".png")
+        paste0("../heatmap_", env, "_", metric, "01.png")
       ),
       plot = p,
       width = 12,

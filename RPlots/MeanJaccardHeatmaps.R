@@ -34,6 +34,8 @@ METRIC_LABELS <- c(
   Creal = "Realized connectance (L / S²)"
 )
 
+DIFF_METRIC_LABEL <- "Mean Jaccard mismatch\n(Random − autocorr)"
+
 # ============================================================
 # 1) MATRIX → LONG
 # ============================================================
@@ -289,6 +291,146 @@ plot_heatmap_metric <- function(metric_name,
 }
 
 # ============================================================
+# 4b) DIFF HEATMAP (Random − autocorr) FOR MEAN JACCARD MISMATCH
+# ============================================================
+plot_heatmap_diff_mean_jaccard <- function(horizontal_legend = FALSE) {
+  
+  df_diff <- heat_df %>%
+    filter(Metric == "mean_jaccard_mismatch",
+           Environment %in% c("random", "autocorr")) %>%
+    select(Environment, Network, Regime, Connectance, NicheCorr, value) %>%
+    pivot_wider(names_from = Environment, values_from = value) %>%
+    mutate(value = random - autocorr) %>%
+    select(Network, Regime, Connectance, NicheCorr, value)
+  
+  lim <- max(abs(df_diff$value), na.rm = TRUE)
+  
+  # ------------------------------------------------------------
+  # Legend configuration (MATCHING YOUR EXACT GUIDE SETTINGS)
+  # ------------------------------------------------------------
+  if (horizontal_legend) {
+    
+    fill_scale <- scale_fill_gradient2(
+      low = "blue",
+      mid = "white",
+      high = "red",
+      midpoint = 0,
+      limits = c(-lim, lim),
+      oob = scales::squish,
+      guide = guide_colorbar(
+        direction = "horizontal",
+        title.position = "left",
+        label.position = "bottom",
+        barwidth  = unit(8, "cm"),
+        barheight = unit(0.5, "cm"),
+        title.theme = element_text(
+          face = "bold",
+          size = 13,
+          hjust = 0.5,
+          vjust = 0.9
+        ),
+        frame.colour = "black",
+        ticks.colour = "black"
+      )
+    )
+    
+    legend_pos <- "bottom"
+    
+  } else {
+    
+    fill_scale <- scale_fill_gradient2(
+      low = "blue",
+      mid = "white",
+      high = "red",
+      midpoint = 0,
+      limits = c(-lim, lim),
+      oob = scales::squish,
+      guide = guide_colorbar(
+        direction = "vertical",
+        title.position = "top",
+        title.hjust = 0.5,
+        label.position = "right",
+        barwidth  = unit(0.7, "cm"),
+        barheight = unit(6.5, "cm"),
+        frame.colour = "black",
+        ticks.colour = "black"
+      )
+    )
+    
+    legend_pos <- "right"
+  }
+  
+  p <- ggplot(df_diff,
+              aes(x = Connectance,
+                  y = NicheCorr,
+                  fill = value)) +
+    geom_tile() +
+    facet_grid(Network ~ Regime) +
+    scale_x_continuous(
+      breaks = seq(0.005, 0.15, length.out = 5),
+      labels = function(x) {
+        x_round <- round(x / 0.005) * 0.005
+        
+        sapply(x_round, function(val) {
+          # Check if the third decimal is zero
+          third_decimal <- round(val * 1000) %% 10
+          
+          if (third_decimal == 0) {
+            sprintf("%.2f", val)  # ends in 0 → use 2 decimals
+          } else {
+            sprintf("%.3f", val)  # otherwise → 3 decimals
+          }
+        })
+      },
+      expand = c(0, 0)
+    ) +
+    scale_y_continuous(expand = c(0,0)) +
+    labs(
+      x = "Connectance",
+      y = "Niche correlation",
+      fill = DIFF_METRIC_LABEL
+    ) +
+    fill_scale +
+    theme_heat_balanced()
+  
+  if (horizontal_legend) {
+    
+    p <- p + theme(
+      legend.position = legend_pos,
+      
+      legend.title = element_text(
+        face = "bold",
+        size = 13,
+        hjust = 0,      # left align text inside the box
+        vjust = 1.2,
+        margin = margin(r = 10)
+      )
+      ,
+      
+      legend.text = element_text(size = 11),
+      legend.background = element_blank(),
+      legend.key = element_blank()
+    )
+    
+  } else {
+    
+    p <- p + theme(
+      legend.position = legend_pos,
+      legend.title = element_text(
+        face = "bold",
+        size = 13,
+        margin = margin(b = 12)
+      ),
+      legend.text = element_text(size = 11),
+      legend.background = element_blank(),
+      legend.key = element_blank()
+    )
+  }
+  
+  return(p)
+}
+
+# ============================================================
 # 5) EXPORT (NOW SEPARATED BY ENVIRONMENT)
 # ============================================================
 metrics_main <- c(
@@ -324,11 +466,11 @@ for (env in ENVKINDS) {
 metrics_diag <- c("achieved_r", "Creal")
 
 for (env in ENVKINDS) {
-
+  
   for (metric in metrics_diag) {
-
+    
     p <- plot_heatmap_metric(metric, env, fixed_limits = FALSE, horizontal_legend = TRUE)
-
+    
     ggsave(
       filename = file.path(
         OUTDIR,
@@ -342,5 +484,19 @@ for (env in ENVKINDS) {
   }
 }
 
-cat("Balanced heatmaps exported separately for random and autocorrelated environments.\n")
+# ============================================================
+# 5b) EXPORT DIFF HEATMAP
+# ============================================================
+p_diff <- plot_heatmap_diff_mean_jaccard(horizontal_legend = TRUE)
+
+ggsave(
+  filename = file.path(
+    OUTDIR,
+    "../Difference_mean_jaccard_mismatch.png"
+  ),
+  plot = p_diff,
+  width = 12,
+  height = 10,
+  dpi = 600
+)
 
