@@ -60,8 +60,8 @@ const CORR_RANGE = (0.0, 1.0)
 const N_CONNECT = 15
 const N_CORR = 15
 
-const NREP = 20
-const TAIL_THRESH = 0.8
+const NREP = 25
+const TAIL_THRESH = 0.1
 
 const N_MODULES = 6
 const MODULAR_IN_BIAS = 6.0
@@ -74,7 +74,7 @@ const MU_NOISE_SD = 1.8
 
 const BASE_SEED = 20260202
 
-OUTDIR = joinpath(pwd(), "output_jaccard_tail_60x60_")
+OUTDIR = joinpath(pwd(), "RPlots/Plots/q90JaccardMismatch_heatmaps/data_tail01")
 isdir(OUTDIR) || mkpath(OUTDIR)
 
 # ============================================================
@@ -989,7 +989,7 @@ println("OUTDIR: ", OUTDIR)
 store, Cvals, Rvals = sweep_all()
 
 # --- Save cache
-cache_path = joinpath(OUTDIR, "FinalSweepJaccardTail_conn0_005to0_15_corr0to1_20reps_range15_emin50_60x60grid.jls")
+cache_path = joinpath(OUTDIR, "FinalSweepJaccardTail_conn0_005to0_15_corr0to1_25reps_range15_emin50_60x60grid.jls")
 serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
 println("Saved sweep cache to: ", cache_path)
 
