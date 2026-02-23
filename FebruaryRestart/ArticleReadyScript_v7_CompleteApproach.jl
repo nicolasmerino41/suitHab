@@ -37,7 +37,7 @@ using Printf
 using Dates
 
 # ============================================================
-# 0) Global parameters (tune here)
+# 0) Global parameters
 # ============================================================
 # Spatial grid
 const NX = 60
@@ -52,7 +52,7 @@ const BASAL_FRAC = 0.30  # basal species fraction
 const USE_CONNECTIVITY_FILTER = true
 const Emin_patch = 50  # LCC threshold for persistence (set smaller if you want less stringent)
 
-# Environmental field domain (e.g., temperature)
+# Environmental field domain
 const E_MIN = 0.0
 const E_MAX = 100.0
 
@@ -80,7 +80,7 @@ const HEAVYTAIL_GAMMA = 2.2        # out-degree heaviness
 const HEAVYTAIL_KMAX_FRAC = 0.35   # kmax = round(frac*(S-1))
 const CASCADE_LAMBDA = 2.5         # 0 = uniform among lower ranks; higher = interval-like
 
-# Mechanistic niche-correlation builder knobs
+# Mechanistic niche-correlation
 const RELAX_ITERS = 30
 const MU_NOISE_SD = 1.8            # consumer μ jitter during relaxation
 const TARGET_R_TOL = 0.03
@@ -89,14 +89,12 @@ const TARGET_R_TOL = 0.03
 const BASE_SEED = 20260202
 
 # Output directory
-# ts = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
 OUTDIR = joinpath(pwd(), "RPlots/Plots/MeanJaccardMismatch_heatmaps/data")
 isdir(OUTDIR) || mkpath(OUTDIR)
 
 # ============================================================
 # 1) Index helpers + neighbors (4-neighbour)
 # ============================================================
-
 @inline linidx(x::Int, y::Int) = (y - 1) * NX + x
 @inline x_of(i::Int) = ((i - 1) % NX) + 1
 @inline y_of(i::Int) = ((i - 1) ÷ NX) + 1
@@ -209,13 +207,9 @@ function largest_component_mask(ws::CCWorkspace, mask::BitVector)
     return out
 end
 
-# Override the old behavior:
-# - if USE_CONNECTIVITY_FILTER = false -> return mask unchanged
-# - else -> keep all components >= Emin (and drop the rest)
 # ============================================================
-# Connectivity filter (PATCH): keep ALL components ≥ Emin
+# Connectivity filter: keep ALL components ≥ Emin
 # ============================================================
-
 # Keeps every connected component (4-neigh) whose size is >= Emin
 # Drops smaller components. If nothing survives -> all-false.
 function keep_components_ge_Emin(ws::CCWorkspace, mask::BitVector, Emin::Int)
@@ -280,7 +274,6 @@ end
 # ============================================================
 # 3) Environmental fields
 # ============================================================
-
 function rescale_to_range!(v::Vector{Float64}, lo::Float64, hi::Float64)
     mn = minimum(v); mx = maximum(v)
     if mx == mn
@@ -325,7 +318,6 @@ end
 # ============================================================
 # 4) Niches: suitability masks (1D Gaussian threshold)
 # ============================================================
-
 @inline function suitability_mask_1d(E::Vector{Float64}, μ::Float64, σ::Float64, thresh::Float64)
     lim = sqrt(-2.0 * log(thresh))  # |(E-μ)/σ| <= lim
     invσ = 1.0 / max(σ, 1e-6)
@@ -366,7 +358,6 @@ end
 # Consumers are species nb+1:S; basal 1:nb have no prey.
 # Each consumer is guaranteed ≥1 prey.
 # ============================================================
-
 function consumers_and_basal()
     nb = round(Int, BASAL_FRAC * S)
     basal_mask = BitVector(falses(S))
@@ -376,7 +367,6 @@ function consumers_and_basal()
 end
 
 function realized_connectance(prey::Vector{Vector{Int}}, basal_mask::BitVector)
-    # realized L / S^2 (to match your earlier convention)
     L = 0
     for i in 1:S
         basal_mask[i] && continue
@@ -390,7 +380,6 @@ function ensure_min1_prey!(rng::AbstractRNG, prey::Vector{Vector{Int}}, basal_ma
     for i in 1:S
         basal_mask[i] && continue
         if isempty(prey[i])
-            # prefer basal prey
             candidates = findall(basal_mask)
             if isempty(candidates)
                 explained = [j for j in 1:S if j != i]
@@ -437,7 +426,6 @@ function build_metaweb_modular(rng::AbstractRNG, C::Float64, basal_mask::BitVect
     end
     Ltarget = round(Int, C * S^2)
 
-    # helper: sample prey with within-module bias
     function sample_prey(i::Int)
         inmod = Int[]
         outmod = Int[]
@@ -491,16 +479,15 @@ function build_metaweb_heavytail(rng::AbstractRNG, C::Float64, basal_mask::BitVe
     # weights ~ Pareto-like
     w = zeros(Float64, nC)
     for k in 1:nC
-        # Pareto with exponent gamma: use inverse-CDF with u^( -1/(gamma-1) )
+        # Pareto with exponent gamma: inverse-CDF with u^( -1/(gamma-1) )
         u = rand(rng)
         w[k] = u^(-1/(HEAVYTAIL_GAMMA-1))
     end
     w ./= sum(w)
 
-    # allocate degrees: start with 1 each
     deg = ones(Int, nC)
     remaining = max(0, Ltarget - nC)
-    # multinomial allocation of remaining edges
+    
     for _ in 1:remaining
         r = rand(rng)
         acc = 0.0

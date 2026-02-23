@@ -1,8 +1,3 @@
-#!/usr/bin/env julia
-# Julia 1.11
-# Run:  julia --threads auto biotic_divergence_jaccard_tail_pipeline.jl
-#
-# PURPOSE (self-contained, no external data)
 # ------------------------------------------------------------
 # A vs AB baseline divergence (no habitat loss), focusing on PER-SPECIES Jaccard mismatch:
 #   mismatch_i = 1 - J(A_i, AB_i)  for consumer species with |A_i|>0
