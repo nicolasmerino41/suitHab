@@ -241,13 +241,13 @@ final_plot <-
   top_row /
   plot_spacer() /
   p_niche +
-  plot_layout(heights = c(1.5, 0.0, 0.5))
+  plot_layout(heights = c(5.0, 0.0, 0.75))
 
 ggsave(
   OUTPUT_FILE,
   final_plot,
-  width = 20,
-  height = 8.5,
+  width = 15,
+  height = 15,
   dpi = 600
 )
 

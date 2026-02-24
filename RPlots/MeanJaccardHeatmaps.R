@@ -34,7 +34,7 @@ METRIC_LABELS <- c(
   Creal = "Realized connectance (L / S²)"
 )
 
-DIFF_METRIC_LABEL <- "Mean Jaccard mismatch\n(Random − autocorr)"
+DIFF_METRIC_LABEL <- "Mean Jaccard mismatch\n(Random − Autocorrelated)"
 
 # ============================================================
 # 1) MATRIX → LONG
