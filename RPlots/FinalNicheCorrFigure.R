@@ -10,7 +10,7 @@ library(viridis)
 
 OUTROOT <- "RPlots/Plots/outputs_merged_all_metrics"
 TRAITS  <- c("ctmin", "lt50", "ctmax", "ltmax")
-OUTPUT_FILE <- "NODE_combined_with_niche.png"
+OUTPUT_FILE <- "RPlots/Plots/NODE_combined_with_niche.png"
 
 # ============================================================
 # PUBLICATION THEME
