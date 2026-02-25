@@ -7,76 +7,92 @@ OUTROOT <- "RPlots/Plots"
 TRAITS  <- c("ctmin", "lt50", "ctmax", "ltmax")
 OUTPUT_FILE <- "RPlots/Plots/MetawebCompilation_PlusCartoon.png"
 
-cartoon_xmin <- xmax * 0.62
-cartoon_xmax <- xmax *1.2
+# ============================================================
+# USER CONTROLS
+# ============================================================
 
-cartoon_ymin <- 0.5
-cartoon_ymax <- 20
-
-# total height available
-total_height <- cartoon_ymax - cartoon_ymin
-
-# give each network equal height
-net_height <- total_height * 0.35
-
-# vertical gap for arrow
-gap <- total_height * 0.12
-
-# Bottom network box
-bottom_ymin <- cartoon_ymin
-bottom_ymax <- bottom_ymin + net_height
-
-# Top network box
-top_ymax <- cartoon_ymax
-top_ymin <- top_ymax - net_height
-
-make_cartoon_network <- function(connectance = 0.1,
-                                 xmin, xmax,
-                                 ymin, ymax) {
+POS <- list(
+  # Reference lines / labels
+  x_ref = 10.0,
+  average_y_rank_mult = 3.0,
+  global_avg_label_x_mult = 1.35,
+  global_avg_label_y_mult = 0.85,
   
-  set.seed(1)
-  n <- 100
+  # Simulation reference label
+  sim_label_x = 10.0,
+  sim_label_y = 20.0,
+  sim_label_text = "Simulation reference (250 species)\nConnectance = 0.04\nMean Degree = 10.0",
   
-  nodes <- tibble(
-    id = 1:n,
-    x = runif(n),
-    y = runif(n)
-  )
+  # Cartoon horizontal placement (relative to data xmax)
+  cartoon_xmin_mult = 0.62,
+  cartoon_xmax_mult = 1.26,
   
-  # scale to rectangle
-  nodes <- nodes |>
-    mutate(
-      x = xmin + x * (xmax - xmin),
-      y = ymin + y * (ymax - ymin)
-    )
+  # Cartoon box padding (horizontal only)
+  cartoon_box_x_left_div  = 1.03,
+  cartoon_box_x_right_mult = 1.03,
   
-  edges <- expand.grid(i = 1:n, j = 1:n) |>
-    filter(i < j) |>
-    sample_frac(connectance) |>
-    left_join(nodes, by = c("i" = "id")) |>
-    rename(x1 = x, y1 = y) |>
-    left_join(nodes, by = c("j" = "id")) |>
-    rename(x2 = x, y2 = y)
+  # Cartoon vertical frame (absolute in rank coordinates)
+  cartoon_box_ymin = 0.5,
+  cartoon_box_ymax = 20.0,
   
-  list(nodes = nodes, edges = edges)
-}
-
-net_sparse <- make_cartoon_network(
-  connectance = 0.01,
-  xmin = cartoon_xmin,
-  xmax = cartoon_xmax,
-  ymin = bottom_ymin,
-  ymax = bottom_ymax
+  # Network layout inside cartoon box
+  net_height_frac = 0.30,
+  gap_frac = 0.12,
+  bottom_base_nudge = 0.20,
+  top_base_nudge = 0.20,   # applied before top shift
+  bottom_shift = -0.35,    # easy tweak
+  top_shift    = -1.2,    # easy tweak
+  
+  # Cartoon label y offsets (relative to network tops)
+  top_cartoon_label_y_nudge    = 0.2,
+  bottom_cartoon_label_y_nudge =  0.50,
+  
+  # Arrow (center x will be computed from cartoon box)
+  arrow_y_start = 8.55,
+  arrow_y_end   = 12.65,
+  
+  # Plot limits
+  xlim_right_mult = 1.20
 )
 
-net_dense <- make_cartoon_network(
-  connectance = 0.03,
-  xmin = cartoon_xmin,
-  xmax = cartoon_xmax,
-  ymin = top_ymin,
-  ymax = top_ymax
+STY <- list(
+  # Main plot
+  point_stroke = 0.4,
+  lollipop_stem_alpha = 0.25,
+  lollipop_stem_lwd = 0.4,
+  
+  # Cartoon box
+  cartoon_box_fill_alpha = 0.65,
+  cartoon_box_border_alpha = 0.45,
+  cartoon_box_lwd = 0.0,
+  
+  # Cartoon networks
+  cartoon_edge_lwd = 0.58,
+  cartoon_edge_alpha = 0.50,
+  cartoon_node_size = 4.0,
+  cartoon_node_fill = "#f7f7f7",
+  cartoon_node_stroke = 0.60,
+  
+  # Cartoon labels
+  cartoon_label_size = 3.3,
+  cartoon_label_r = 0.18,
+  cartoon_label_pad = 0.5,
+  
+  # Arrow
+  arrow_lwd = 1.5,
+  arrow_type = "open",  # "open" or "closed"
+  arrow_len_cm = 0.28
 )
 
+SHOW <- list(
+  ref_line = TRUE,
+  sim_reference_label = TRUE
+  # If you want markers too, add a helper layer below or toggle them here
+)
+
+# ============================================================
+# Data
+# ============================================================
 
 mean_degree <- c(
   96.1992, 253.1312, 21.3818, 19.0386, 27.4189, 17.5256, 23.7921, 14.7914,
@@ -119,7 +135,7 @@ legend_order <- c(
   "Trophic, parasitic, mutualistic"
 )
 
-x_ref <- 6.25
+rank_spacing <- 1.0
 
 df <- tibble(
   mean_degree = mean_degree,
@@ -129,143 +145,340 @@ df <- tibble(
 ) |>
   mutate(type = factor(type, levels = legend_order)) |>
   arrange(mean_degree) |>
-  mutate(
-    rank = row_number(),
-    xmin = min(mean_degree),
-    label_x = mean_degree * 1.04
-  )
+  mutate(rank = row_number() * rank_spacing)
 
-m   <- median(df$mean_degree)
-q25 <- quantile(df$mean_degree, 0.25)
-q75 <- quantile(df$mean_degree, 0.75)
+# ============================================================
+# Summary values / axes
+# ============================================================
+
+m <- median(df$mean_degree)
 
 xmin <- min(df$mean_degree)
 xmax <- max(df$mean_degree)
-
-tickvals <- c(1, 2, 3.3191, 5, 10, 20, 50, 100, 200, 300)
-tickvals <- tickvals[tickvals >= xmin & tickvals <= xmax]
-
-pal <- brewer.pal(5, "Set1")
-rank_spacing <- 1.0
-
-left_limit <- min(df$mean_degree)
+left_limit <- xmin
 
 df <- df |>
   mutate(
-    rank = row_number() * rank_spacing,
     stem_start = left_limit,
     label_x = mean_degree * 1.08
   )
 
-average_y <- 3 * rank_spacing
+tickvals <- c(1, 2, 3.3191, 5, 10, 20, 50, 100, 200, 300)
+tickvals <- tickvals[tickvals >= xmin & tickvals <= xmax]
 
-arrow_x <- (cartoon_xmin + cartoon_xmax) / 2
+average_y <- POS$average_y_rank_mult * rank_spacing
 
-arrow_y_start <- bottom_ymax + gap * 0.3
-arrow_y_end   <- top_ymin - gap * 0.1
+# ============================================================
+# Helpers
+# ============================================================
 
-p1 = ggplot(df, aes(x = mean_degree, y = rank)) +
+make_cartoon_network <- function(connectance = 0.10,
+                                 xmin, xmax,
+                                 ymin, ymax,
+                                 n = 40,
+                                 seed = 1) {
+  set.seed(seed)
   
-  # ---- Reference line FIRST (so it stays behind) ----
-geom_vline(xintercept = x_ref,
-           color = "red",
-           linetype = "dashed",
-           linewidth = 0.9) +
+  # Clustered layout (looks more cartoon-like than uniform scatter)
+  k <- 4
+  centers <- tibble(
+    cluster = 1:k,
+    cx = c(0.20, 0.42, 0.65, 0.82),
+    cy = c(0.70, 0.35, 0.65, 0.35)
+  )
+  
+  nodes <- tibble(
+    id = 1:n,
+    cluster = sample(1:k, size = n, replace = TRUE)
+  ) |>
+    left_join(centers, by = "cluster") |>
+    mutate(
+      x = pmin(pmax(rnorm(n(), cx, 0.08), 0.05), 0.95),
+      y = pmin(pmax(rnorm(n(), cy, 0.10), 0.05), 0.95),
+      x = xmin + x * (xmax - xmin),
+      y = ymin + y * (ymax - ymin)
+    ) |>
+    select(id, cluster, x, y)
+  
+  pairs <- as.data.frame(t(combn(nodes$id, 2)))
+  names(pairs) <- c("i", "j")
+  
+  edges <- pairs |>
+    left_join(nodes |> select(id, cluster, x, y), by = c("i" = "id")) |>
+    rename(cluster_i = cluster, x1 = x, y1 = y) |>
+    left_join(nodes |> select(id, cluster, x, y), by = c("j" = "id")) |>
+    rename(cluster_j = cluster, x2 = x, y2 = y) |>
+    mutate(
+      p_edge = if_else(cluster_i == cluster_j,
+                       pmin(connectance * 2.2, 0.75),
+                       pmin(connectance * 0.65, 0.40)),
+      keep = runif(n()) < p_edge
+    ) |>
+    filter(keep) |>
+    select(x1, y1, x2, y2)
+  
+  list(nodes = nodes, edges = edges)
+}
+
+label_layers_from_df <- function(lbl_df, size = 3.3, r = 0.18, pad = 0.22) {
+  lapply(seq_len(nrow(lbl_df)), function(i) {
+    annotate(
+      "label",
+      x = lbl_df$x[i],
+      y = lbl_df$y[i],
+      label = lbl_df$label[i],
+      hjust = lbl_df$hjust[i],
+      fontface = "bold",
+      size = size,
+      fill = lbl_df$fill[i],
+      colour = lbl_df$colour[i],
+      label.r = grid::unit(r, "lines"),
+      label.padding = grid::unit(pad, "lines")
+    )
+  })
+}
+
+maybe_layer <- function(cond, layer) {
+  if (isTRUE(cond)) layer else NULL
+}
+
+# ============================================================
+# Cartoon placement (easy-to-edit layout)
+# ============================================================
+
+# Horizontal extents (in x data units)
+cartoon_xmin <- xmax * POS$cartoon_xmin_mult
+cartoon_xmax <- xmax * POS$cartoon_xmax_mult
+
+# Vertical frame for the cartoon box (rank coordinates)
+cartoon_box_ymin <- POS$cartoon_box_ymin
+cartoon_box_ymax <- POS$cartoon_box_ymax
+
+total_height <- cartoon_box_ymax - cartoon_box_ymin
+net_height   <- total_height * POS$net_height_frac
+gap          <- total_height * POS$gap_frac
+
+# Base network positions inside the cartoon frame
+bottom_ymin <- cartoon_box_ymin + POS$bottom_base_nudge
+bottom_ymax <- bottom_ymin + net_height
+
+top_ymax <- cartoon_box_ymax - POS$top_base_nudge
+top_ymin <- top_ymax - net_height
+
+# User shifts (the main knobs you'll change)
+bottom_ymin <- bottom_ymin + POS$bottom_shift
+bottom_ymax <- bottom_ymax + POS$bottom_shift
+
+top_ymin <- top_ymin + POS$top_shift
+top_ymax <- top_ymax + POS$top_shift
+
+# Cartoon box extents (single box around both networks + arrow)
+cartoon_box <- list(
+  xmin = cartoon_xmin / POS$cartoon_box_x_left_div,
+  xmax = cartoon_xmax * POS$cartoon_box_x_right_mult,
+  ymin = cartoon_box_ymin,
+  ymax = cartoon_box_ymax
+)
+
+# Use geometric center because x-axis is log-scaled (visually centered on log scale)
+x_mid <- sqrt(cartoon_box$xmin * cartoon_box$xmax)
+
+# Arrow positions (single center line)
+arrow_x <- x_mid
+arrow_y_start <- POS$arrow_y_start
+arrow_y_end   <- POS$arrow_y_end
+
+# Cartoon label colors (using viridis endpoints)
+vir <- viridisLite::viridis(100, option = "viridis")
+low_col  <- vir[20]    # dark purple
+high_col <- vir[70]  # bright yellow
+
+# higher mean degree = purple (top), lower mean degree = yellow (bottom)
+cartoon_labels <- tibble(
+  x = c(x_mid, x_mid),
+  y = c(top_ymax + POS$top_cartoon_label_y_nudge,
+        bottom_ymax + POS$bottom_cartoon_label_y_nudge),
+  label = c("HIGHER MEAN DEGREE", "LOWER MEAN DEGREE"),
+  fill = c(low_col, high_col),
+  colour = c("white", "white"),
+  hjust = c(0.5, 0.5)
+)
+
+# Build cartoon networks (easy to tweak here)
+net_specs <- tibble(
+  connectance = c(0.05, 0.15),
+  ymin = c(bottom_ymin, top_ymin),
+  ymax = c(bottom_ymax, top_ymax),
+  n = c(28, 40),
+  seed = c(11, 22)
+)
+
+cartoon_nets <- lapply(seq_len(nrow(net_specs)), function(i) {
+  make_cartoon_network(
+    connectance = net_specs$connectance[i],
+    xmin = cartoon_xmin,
+    xmax = cartoon_xmax,
+    ymin = net_specs$ymin[i],
+    ymax = net_specs$ymax[i],
+    n = net_specs$n[i],
+    seed = net_specs$seed[i]
+  )
+})
+
+cartoon_edges <- bind_rows(lapply(seq_along(cartoon_nets), function(i) {
+  cartoon_nets[[i]]$edges |> mutate(group = i)
+}))
+
+cartoon_nodes <- bind_rows(lapply(seq_along(cartoon_nets), function(i) {
+  cartoon_nets[[i]]$nodes |> mutate(group = i)
+}))
+
+# Pre-build repeatable layer lists (no repetition in the main ggplot call)
+cartoon_label_layers <- label_layers_from_df(
+  cartoon_labels,
+  size = STY$cartoon_label_size,
+  r = STY$cartoon_label_r,
+  pad = STY$cartoon_label_pad
+)
+
+optional_ref_line_layer <- maybe_layer(
+  SHOW$ref_line,
+  geom_vline(
+    xintercept = POS$x_ref,
+    color = "red",
+    linetype = "dashed",
+    linewidth = 0.9
+  )
+)
+
+optional_sim_label_layer <- maybe_layer(
+  SHOW$sim_reference_label,
+  annotate(
+    "label",
+    x = POS$sim_label_x,
+    y = POS$sim_label_y,
+    label = POS$sim_label_text,
+    hjust = 0.5,
+    size = 3.2,
+    fontface = "bold",
+    fill = "white",
+    colour = "black",
+    linewidth = 0.5,
+    label.padding = unit(0.45, "lines")
+  )
+)
+
+# ============================================================
+# Plot (single final plotting approach)
+# ============================================================
+p1 <- ggplot(df, aes(x = mean_degree, y = rank)) +
+  
+  # ---- Optional reference content ----
+optional_ref_line_layer +
   
   # ---- Median line ----
-geom_vline(xintercept = m,
-           linetype = "dashed",
-           linewidth = 0.6) +
+geom_vline(
+  xintercept = m,
+  linetype = "dashed",
+  linewidth = 0.6
+) +
   
-  # Average label
-  # Average label (black box with white text)
-  annotate("label",
-           x = m * 1.05,
-           y = average_y*0.85,
-           label = "Global average",
-           fontface = "bold",
-           hjust = 0,
-           size = 4.0,
-           fill = "black",
-           label.colour = "black",   # box border
-           colour = "white",         # text color
-           label.size = 0.25,        # border thickness
-           label.r = unit(0.15, "lines"),  # corner roundness
-           label.padding = unit(0.25, "lines")
-  ) +
+  # ---- Global average label ----
+annotate(
+  "label",
+  x = m * POS$global_avg_label_x_mult,
+  y = average_y * POS$global_avg_label_y_mult,
+  label = "GLOBAL AVERAGE",
+  fontface = "bold",
+  hjust = 0.5,
+  size = 4.0,
+  fill = "black",
+  label.colour = "black",
+  colour = "white",
+  label.r = grid::unit(0.15, "lines"),
+  label.padding = grid::unit(0.25, "lines")
+) +
   
   # ---- Lollipop stems ----
-geom_segment(aes(x = stem_start,
-                 xend = mean_degree,
-                 y = rank,
-                 yend = rank),
-             linewidth = 0.4,
-             alpha = 0.25) +
+geom_segment(
+  aes(x = stem_start, xend = mean_degree, y = rank, yend = rank),
+  linewidth = STY$lollipop_stem_lwd,
+  alpha = STY$lollipop_stem_alpha
+) +
   
-  # ---- Points (better circles) ----
-geom_point(aes(fill = type,
-               size = n_nodes),
-           shape = 21,
-           color = "black",
-           stroke = 0.4) +
+  # ---- Main points ----
+geom_point(
+  aes(fill = type, size = n_nodes),
+  shape = 21,
+  color = "black",
+  stroke = STY$point_stroke
+) +
   
   # ---- Labels ----
-geom_text(aes(x = label_x,
-              label = name,
-              color = "black"),
-          hjust = 0,
-          size = 3.1,
-          show.legend = FALSE) +
+geom_text(
+  aes(x = label_x, label = name),
+  hjust = 0,
+  size = 3.1,
+  color = "black",
+  show.legend = FALSE
+) +
   
-  # ---- Star + label moved to top ----
-annotate("point",
-         x = x_ref,
-         y = max(df$rank) - rank_spacing*1.7,
-         shape = 18,
-         size = 6,
-         color = "red") +
+  # ---- ONE enclosing cartoon box ----
+annotate(
+  "rect",
+  xmin = cartoon_box$xmin,
+  xmax = cartoon_box$xmax,
+  ymin = cartoon_box$ymin,
+  ymax = cartoon_box$ymax,
+  fill = alpha("white", STY$cartoon_box_fill_alpha),
+  color = alpha("black", STY$cartoon_box_border_alpha),
+  linewidth = STY$cartoon_box_lwd
+) +
   
-  annotate("text",
-           x = x_ref -1.75,
-           y =20,
-           label = "Simulation reference (6.25)",
-           hjust = 0,
-           vjust = -0.5,
-           size = 3.2,
-           fontface = "bold") +
+  # ---- Cartoon labels (from data frame -> no repeated annotate blocks) ----
+cartoon_label_layers +
   
-# ---- Sparse network ----
-geom_segment(data = net_sparse$edges,
-           aes(x = x1, y = y1, xend = x2, yend = y2),
-           inherit.aes = FALSE,
-           linewidth = 0.4) +
-
-geom_point(data = net_sparse$nodes,
-           aes(x = x, y = y),
-           inherit.aes = FALSE,
-           size = 2) +
-
-# ---- Dense network ----
-geom_segment(data = net_dense$edges,
-           aes(x = x1, y = y1, xend = x2, yend = y2),
-           inherit.aes = FALSE,
-           linewidth = 0.4) +
-
-geom_point(data = net_dense$nodes,
-           aes(x = x, y = y),
-           inherit.aes = FALSE,
-           size = 2) +
-
-# ---- Double arrow ----
-annotate("segment",
-         x = arrow_x,
-         xend = arrow_x,
-         y = arrow_y_start,
-         yend = arrow_y_end,
-         arrow = arrow(type = "closed",
-                       ends = "both",
-                       length = unit(0.35, "cm")),
-         linewidth = 1.2) +
+optional_sim_label_layer +
+  
+  # ---- Cartoon edges + nodes (combined data -> no repeated geoms) ----
+geom_segment(
+  data = cartoon_edges,
+  aes(x = x1, y = y1, xend = x2, yend = y2),
+  inherit.aes = FALSE,
+  linewidth = STY$cartoon_edge_lwd,
+  alpha = STY$cartoon_edge_alpha,
+  lineend = "round",
+  colour = "black"
+) +
+  
+  geom_point(
+    data = cartoon_nodes,
+    aes(x = x, y = y),
+    inherit.aes = FALSE,
+    shape = 21,
+    size = STY$cartoon_node_size,
+    fill = STY$cartoon_node_fill,
+    colour = "black",
+    stroke = STY$cartoon_node_stroke,
+    show.legend = FALSE
+  ) +
+  
+  # ---- Double arrow only ----
+annotate(
+  "segment",
+  x = arrow_x,
+  xend = arrow_x,
+  y = arrow_y_start,
+  yend = arrow_y_end,
+  linewidth = STY$arrow_lwd,
+  lineend = "round",
+  colour = "black",
+  arrow = arrow(
+    type = STY$arrow_type,
+    ends = "both",
+    length = grid::unit(STY$arrow_len_cm, "cm")
+  )
+) +
   
   scale_x_log10(
     breaks = tickvals,
@@ -284,18 +497,11 @@ annotate("segment",
     end = 0.9
   ) +
   
-  scale_color_viridis_d(
-    option = "viridis",
-    begin = 0.1,
-    end = 0.9,
-    guide = "none"
+  coord_cartesian(
+    xlim = c(left_limit, xmax * POS$xlim_right_mult),
+    ylim = c(0, max(df$rank)),
+    clip = "off"
   ) +
-  
-    coord_cartesian(
-      xlim = c(left_limit, xmax * 1.30),
-      ylim = c(0, max(df$rank)),
-      clip = "off"
-    ) +
   
   labs(
     x = "Mean degree (log scale)",
@@ -304,22 +510,15 @@ annotate("segment",
   ) +
   
   theme_classic(base_size = 12) +
-  
   theme(
     legend.position = "bottom",
     legend.direction = "horizontal",
     legend.box = "horizontal",
-    
     legend.text = element_text(size = 11),
     legend.title = element_text(size = 13, face = "bold"),
-    
     axis.line = element_line(linewidth = 0.6),
-    
+    axis.text = element_text(color = "black"),
     plot.margin = margin(10, 20, 10, 10)
-  ) +
-  
-  theme(
-    axis.text = element_text(color = "black")
   ) +
   
   guides(
@@ -327,7 +526,7 @@ annotate("segment",
       nrow = 1,
       byrow = TRUE,
       override.aes = list(
-        size = 4,      # controls legend circle size
+        size = 4,
         shape = 21,
         stroke = 0.6
       )
@@ -341,5 +540,3 @@ ggsave(
   height = 8.5,
   dpi = 600
 )
-
-
