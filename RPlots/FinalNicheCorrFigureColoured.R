@@ -64,10 +64,10 @@ get_label_colour <- function(x_pos) {
 
 # Manually chosen x-positions
 trait_positions <- c(
-  ctmin = -2.2,
-  lt50  =  2.4,
-  ctmax =  1.9,
-  ltmax =  2.9
+  ctmin = -1.7,
+  lt50  =  2.2,
+  ctmax =  1.7,
+  ltmax =  2.7
 )
 
 # Compute exact label colours
@@ -76,7 +76,6 @@ trait_colors <- sapply(trait_positions, get_label_colour)
 # ------------------------------------------------------------
 # Build niche plot
 # ------------------------------------------------------------
-
 p_niche <- ggplot(niche_tiles) +
   
   geom_tile(aes(x = x,
@@ -150,10 +149,10 @@ add_metric_label <- function(p, x_pos, y_text, label, fill_col) {
              label.padding = unit(0.35, "lines"))
 }
 
-p_niche <- add_metric_label(p_niche, -2.2, 0.31, "CTmin", trait_colors["ctmin"])
-p_niche <- add_metric_label(p_niche,  1.9,  0.35, "CTmax",  trait_colors["ctmax"])
-p_niche <- add_metric_label(p_niche,  2.4,  0.28, "LT50", trait_colors["lt50"])
-p_niche <- add_metric_label(p_niche,  2.9,  0.21, "LTmax", trait_colors["ltmax"])
+p_niche <- add_metric_label(p_niche, -1.7, 0.32, "CTmin", trait_colors["ctmin"])
+p_niche <- add_metric_label(p_niche,  1.7,  0.32, "CTmax",  trait_colors["ctmax"])
+p_niche <- add_metric_label(p_niche,  2.2,  0.265, "LT50", trait_colors["lt50"])
+p_niche <- add_metric_label(p_niche,  2.7,  0.21, "LTmax", trait_colors["ltmax"])
 
 # ============================================================
 # NODE-LEVEL PANEL FUNCTION (uses computed background)
@@ -193,17 +192,23 @@ make_node_plot <- function(trait, bg_color) {
   label_text <- paste0("N = ", n,
                        "\nr = ", round(r, 2))
   
+  # Position for custom boxed title
+  x_mid <- mean(range(df$pred_trait, na.rm = TRUE))
+  y_top <- max(df$mean_prey_trait, na.rm = TRUE)
+  
   ggplot(df,
          aes(x = pred_trait,
              y = mean_prey_trait)) +
     
-    geom_point(size = 2.5, alpha = 0.9, color = bg_color) +
-    
+    geom_point(size = 2.5, alpha = 0.9, color = "black") +
+    # geom_point(size = 2.5, alpha = 0.9, color = bg_color) +
     geom_smooth(method = "lm",
                 se = FALSE,
                 linewidth = 1,
-                color = bg_color) +
+                color = "black") +
+                # color = bg_color"black") +
     
+    # N and r annotation (top-left)
     annotate("text",
              x = -Inf,
              y = Inf,
@@ -213,13 +218,29 @@ make_node_plot <- function(trait, bg_color) {
              size = 6,
              color = "black") +
     
+    # Boxed colored title badge (matches niche labels)
+    annotate("label",
+             x = x_mid,
+             y = y_top,
+             label = title_map[[trait]],
+             vjust = -0.25,             # was -0.7 (too high)
+             size = 7,
+             fontface = "bold",
+             fill = unname(bg_color),
+             color = "white",
+             label.size = 1.1,
+             label.padding = unit(0.35, "lines")) +
+    
     labs(
-      title = title_map[[trait]],
       x = "Predator thermal limit (°C)",
       y = "Mean prey thermal limit (°C)"
     ) +
     
-    theme_nature(bg_color)
+    coord_cartesian(clip = "off") +     # allow title badge outside panel
+    theme_nature(bg_color) +
+    theme(
+      plot.margin = margin(t = 34, r = 8, b = 8, l = 8)
+    )
 }
 
 # ============================================================
