@@ -17,7 +17,7 @@
 # - Environmental space (2): Random vs Autocorrelated field
 #
 # Outputs:
-# - Heatmaps (per env type) for 3 divergence metrics:
+# -  for 3 divergence metrics:
 #   (i) Relative richness loss: 1 - S_AB / S_A   (consumers-only)
 #   (ii) Mean per-species Jaccard mismatch: mean_i [1 - J(A_i, AB_i)]  (consumers-only, |A_i|>0)
 #   (iii) Fraction affected: frac_i [A_i != AB_i]  (consumers-only, |A_i|>0)
@@ -26,8 +26,7 @@
 # Notes:
 # - "One-prey rule" is hard: consumer present in a cell iff it is climatically suitable AND at least one prey is present there.
 # - Basal species have no prey and are not trophically restricted (AB = A).
-# - Connectance here follows the previous convention: Ltarget ≈ round(C * S^2),
-#   while links are only from consumers -> prey, so actual realized connectance is reported.
+# - Connectance follows Ltarget ≈ round(C * S^2), while links are only from consumers -> prey, so actual realized connectance is reported.
 
 using Random
 using Statistics
@@ -50,7 +49,7 @@ const BASAL_FRAC = 0.30  # basal species fraction
 
 # Spatial viability filter (movement/connectivity proxy)
 const USE_CONNECTIVITY_FILTER = true
-const Emin_patch = 50  # LCC threshold for persistence (set smaller if you want less stringent)
+const Emin_patch = 50  # LCC threshold for persistence
 
 # Environmental field domain
 const E_MIN = 0.0
@@ -62,7 +61,7 @@ const SUIT_THRESH = 0.25
 
 # Environmental autocorrelation
 const AUTOCORR_ITERS = 18
-const AUTOCORR_ALPHA = 0.55  # 0..1 (higher = smoother)
+const AUTOCORR_ALPHA = 0.55 # 0..1 (higher = smoother)
 
 # Sweep axes
 const CONNECTANCE_RANGE = (0.005, 0.15)
@@ -70,15 +69,15 @@ const CORR_RANGE       = (0.0, 1.0)
 const N_CONNECT = 15
 const N_CORR    = 15
 
-# Replicates per heatmap cell (increase for final)
+# Replicates per heatmap cell
 const NREP = 20
 
 # Network-family knobs
 const N_MODULES = 6
-const MODULAR_IN_BIAS = 6.0        # >1 increases within-module links vs between
-const HEAVYTAIL_GAMMA = 2.2        # out-degree heaviness
-const HEAVYTAIL_KMAX_FRAC = 0.35   # kmax = round(frac*(S-1))
-const CASCADE_LAMBDA = 2.5         # 0 = uniform among lower ranks; higher = interval-like
+const MODULAR_IN_BIAS = 6.0 # >1 increases within-module links vs between
+const HEAVYTAIL_GAMMA = 2.2 # out-degree heaviness
+const HEAVYTAIL_KMAX_FRAC = 0.35 # kmax = round(frac*(S-1))
+const CASCADE_LAMBDA = 2.5 # 0 = uniform among lower ranks; higher = interval-like
 
 # Mechanistic niche-correlation
 const RELAX_ITERS = 30
@@ -262,7 +261,7 @@ function apply_connectivity_filter(ws::CCWorkspace, mask::BitVector, Emin::Int)
         return mask
     end
 
-    # cheap early-out: total area < Emin can't contain any component >= Emin
+    # cheap early-out: if total area < Emin, it can't contain any component >= Emin
     if count(mask) < Emin
         return BitVector(falses(NCELLS))
     end
@@ -354,8 +353,7 @@ function draw_sigmas(rng::AbstractRNG, regime::BreadthRegime)
 end
 
 # ============================================================
-# 5) Network builders (4 families)
-# Consumers are species nb+1:S; basal 1:nb have no prey.
+# 5) Network builders
 # Each consumer is guaranteed ≥1 prey.
 # ============================================================
 function consumers_and_basal()
@@ -531,7 +529,7 @@ function build_metaweb_heavytail(rng::AbstractRNG, C::Float64, basal_mask::BitVe
 end
 
 function build_metaweb_cascade(rng::AbstractRNG, C::Float64, basal_mask::BitVector)
-    # Cascade hierarchy: consumers feed on lower-ranked species; optional interval bias via CASCADE_LAMBDA.
+    # Cascade hierarchy: consumers feed on lower-ranked species.
     prey = [Int[] for _ in 1:S]
     consumers = findall(!, basal_mask)
     nC = length(consumers)
@@ -603,7 +601,6 @@ end
 # 6) Mechanistic niche correlation builder
 # Target correlation across consumers between μ_cons and mean μ_prey(cons)
 # ============================================================
-
 function pearson_r(a::Vector{Float64}, b::Vector{Float64})
     ma = mean(a); mb = mean(b)
     sa = std(a); sb = std(b)
@@ -1085,22 +1082,20 @@ end
 # 12) MAIN
 # ============================================================
 store, Cvals, Rvals = sweep_all()
+
+# SAVE THE RESULTS FOR FUTURE USE
 using Serialization
-
-cache_path = joinpath(OUTDIR, "FinalSweep_conn0_005to0_15_corr0to1_20reps_range15_emin50_60x60grid.jls")
+cache_path = joinpath(OUTDIR, "PUT_A_NAME_HERE.jls")
 serialize(cache_path, (store=store, Cvals=Cvals, Rvals=Rvals))
-println("Saved sweep cache to: ", cache_path)
 
-# cache_path = joinpath(OUTDIR, "FinalSweep_conn0_005to0_15_corr0to1_20reps_range15_emin50_60x60grid.jls")
+# LOAD A PREVIOUS CACHE
+# cache_path = joinpath(OUTDIR, "YOUR_CACHE_NAME.jls")
 # data = deserialize(cache_path)
-
 # store = data.store
 # Cvals = data.Cvals
 # Rvals = data.Rvals
 
-# println("Loaded sweep cache from: ", cache_path)
-
-# Save numeric matrices as TSV (simple, no external packages)
+# Save numeric matrices as TSV, for R
 function save_matrix_tsv(path::String, M::Matrix{Float64})
     open(path, "w") do io
         nr, nc = size(M)
@@ -1110,7 +1105,6 @@ function save_matrix_tsv(path::String, M::Matrix{Float64})
     end
 end
 
-println("\nExploding outputs...")
 for env in ENVKINDS, net in NETFAMS, (ri, reg) in enumerate(regimes)
     for metric in [:dSrel, :mean_jaccard_mismatch, :frac_affected, :realized_overlap, :achieved_r, :Creal]
         M = store[(env, net, ri, metric)]
