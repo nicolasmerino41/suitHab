@@ -44,7 +44,6 @@ function run_sensitivity_richness_khat(; tag::Int=41)
         @info "Saved" Sp outfile
     end
 
-    # restore original CELLS_CR contents
     CELLS_CR .= CELLS_CR_ORIG
 
     # ---- merge per-S results into a full results dict over all S_VALUES
