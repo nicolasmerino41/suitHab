@@ -70,7 +70,7 @@ end
 
 res_S = run_sensitivity_richness_khat()
 
-# Plot later with a Windows-safe expname (ASCII, no slashes/colons)
+
 plot_sensitivity_lines(S_VALUES, res_S;
     expname="Richness sweep (khat fixed; C=khat_over_S)",
     xlabel="Regional richness S"
