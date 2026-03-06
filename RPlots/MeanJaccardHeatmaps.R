@@ -16,7 +16,7 @@ Cvals <- seq(0.005, 0.15, length.out = N_CONNECT)
 Rvals <- seq(0.0, 1.0, length.out = N_CORR)
 
 ENVKINDS <- c("random", "autocorr")
-NETFAMS  <- c("Random", "Modular", "Heavytail", "Cascade")
+NETFAMS  <- c("Uniform", "Modular", "Heavytail", "Cascade")
 
 REGIMES <- c(
   "Narrow niche + low variance",
@@ -90,7 +90,7 @@ heat_df <- bind_rows(all_data)
 
 heat_df$Network <- factor(
   heat_df$Network,
-  levels = c("Random", "Modular", "Heavytail", "Cascade")
+  levels = c("Uniform", "Modular", "Heavytail", "Cascade")
 )
 
 heat_df$Regime <- factor(
